@@ -5,7 +5,8 @@
    ========================================================= */
 
 const LS = { cfg: 'gastos.cfg', data: 'gastos.data', queue: 'gastos.queue', prefs: 'gastos.prefs' };
-const ACCENTS = ['#D4FF3A', '#6BFFC8', '#8B7CFF', '#FFB84D'];
+const ACC = '#D4FF3A'; // acento fijo de Gastos
+const ACCENTS = [ACC]; // se conserva por compatibilidad con ajustes guardados antiguos
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const MONTHS_S = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const WD = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -27,7 +28,7 @@ function emptyData() {
   return { movs: [], cats: [], fijos: [], metas: [], retos: [], reglas: [], config: {}, sheetUrl: '' };
 }
 function freshUI() {
-  return { tablaYear: 0, movQ: '', movCat: 'Todo', movMonth: 0, statsPeriod: '6m', statsSel: {}, statsGen: 0, heatDay: null, donutCat: null, betPeriod: 'mes', betGen: 0, story: 0, storyGen: 0, sheet: null, form: {}, add: null, ping: null };
+  return { tablaYear: 0, movQ: '', movCat: 'Todo', movMonth: 0, statsPeriod: '6m', statsSel: {}, statsGen: 0, heatDay: null, donutCat: null, betPeriod: 'todo', betGen: 0, story: 0, storyGen: 0, sheet: null, form: {}, add: null, ping: null };
 }
 
 /* ---------- Utilidades ---------- */
@@ -84,11 +85,19 @@ function icon(name, size = 20, sw = 2) {
 function parseAmount(s) { const n = parseFloat(String(s || '').replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : Math.round(n * 100) / 100; }
 function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* almacenamiento lleno o bloqueado */ } }
 function load(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }
-function acc() {
-  const base = S.prefs.accent || ACCENTS[0];
-  if (S.prefs.mood === false) return base;
-  return S.mood === 'bad' ? '#FF5D73' : S.mood === 'warn' ? '#FFB84D' : base;
+// Acento: siempre lima. Lo positivo (ingresos, cobros, ahorro) va siempre con este color.
+function acc() { return ACC; }
+// Color de estado del mes: solo para la tarjeta «Puedes gastar hoy», la línea de «Tu ritmo» y el halo del +.
+function moodColor() {
+  if (S.prefs.mood === false) return ACC;
+  return S.mood === 'bad' ? '#FF5D73' : S.mood === 'warn' ? '#FFB84D' : ACC;
 }
+function eurBig(n, sign = false) {
+  // Importe grande con los céntimos más pequeños: 18 y «,07 €» en pequeño
+  const t = fmt(n, 2, sign), i = t.lastIndexOf(',');
+  return '<span class="eur">' + esc(t.slice(0, i)) + '<span class="c">' + esc(t.slice(i)) + ' €</span></span>';
+}
+function haptic() { try { const h = document.getElementById('hap'); if (h) h.parentElement.click(); } catch (e) { /* sin vibración */ } }
 
 /* ---------- Datos ---------- */
 
@@ -324,8 +333,9 @@ function movRow(m, i, withActs) {
 
 /* ---------- Pantalla: Inicio ---------- */
 
-function scrInicio() {
-  const now = new Date(), y = now.getFullYear(), mo = now.getMonth(), day = now.getDate(), dim = daysIn(y, mo);
+// Lo que puedes gastar hoy (lo usan Inicio y el aviso al guardar)
+function todayInfo(now = new Date()) {
+  const y = now.getFullYear(), mo = now.getMonth(), day = now.getDate(), dim = daysIn(y, mo);
   const md = monthData(y, mo);
   const ap = apartadoMensual();
   const nomina = Math.max(md.income + pendingIncomeThisMonth(now), incomeBase());
@@ -337,14 +347,19 @@ function scrInicio() {
   const pendingBudg = sum(up.filter((x) => budg.some((c) => c.nombre === x.f.categoria)).map((x) => x.f.importe));
   const daysLeft = dim - day + 1;
   const remaining = budgetTotal > 0 ? budgetTotal - spentBudg - pendingBudg : nomina - ap - pendingSum - md.spentVar;
-  const today = Math.max(0, remaining) / daysLeft;
+  const today = Math.round(Math.max(0, remaining) / daysLeft * 100) / 100;
+  return { y, mo, day, dim, md, ap, nomina, up, pendingSum, budg, budgetTotal, spentBudg, pendingBudg, daysLeft, remaining, today };
+}
+
+function scrInicio() {
+  const now = new Date();
+  const T = todayInfo(now);
+  const { y, mo, day, dim, md, ap, nomina, up, pendingSum, budg, budgetTotal, spentBudg, daysLeft, remaining, today } = T;
   const spent = md.spentVar + ap;
   const pct = nomina ? clamp(spent / nomina * 100, 0, 100) : 0;
   const mpct = day / dim * 100;
   const daily = md.spentVar / day;
   const saveP = nomina - daily * dim - ap - pendingSum;
-  const th = Math.PI * (1 - mpct / 100);
-  const mx = (150 + 130 * Math.cos(th)).toFixed(1), my = (150 - 130 * Math.sin(th)).toFixed(1);
   const hour = now.getHours();
   const hello = hour < 13 ? 'Buenos días' : (hour < 20 ? 'Buenas tardes' : 'Buenas noches');
   const pendNames = up.filter((x) => budg.some((c) => c.nombre === x.f.categoria)).map((x) => x.f.nombre);
@@ -353,24 +368,6 @@ function scrInicio() {
   if (nc) {
     const dd = dayDiff(new Date(), nc.d);
     if (dd <= 3) banner = '<a href="#fijos" class="banner in" style="--d:.06s;background:rgba(255,184,77,.1);border:1px solid rgba(255,184,77,.25);color:#FFD08A"><span class="dot" style="background:#FFB84D;animation:amberPulse 1.8s ease-out infinite"></span><span class="grow">' + (dd === 0 ? 'Hoy' : dd === 1 ? 'Mañana' : 'En ' + dd + ' días') + ' te cobran ' + esc(nc.f.nombre) + ' (' + eur(nc.f.importe) + ')</span>' + icon('chevron-right', 16, 2.4) + '</a>';
-  }
-
-  // Apuestas: balance del mes
-  const bets = md.movs.filter((x) => x.tipo === 'apuesta').sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
-  const anyBets = S.data.movs.some((x) => x.tipo === 'apuesta');
-  let betCard = '';
-  if (anyBets) {
-    const net = md.ret - md.dep;
-    let c = 0; const ser = [0].concat(bets.map((b) => (c += signed(b))));
-    const mn = Math.min(0, ...ser), mxv = Math.max(0, ...ser);
-    const pts = ser.map((v, i) => [(ser.length > 1 ? i / (ser.length - 1) : 1) * 90, 4 + (mxv - v) / ((mxv - mn) || 1) * 28]);
-    let len = 0; for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-    const col = net >= 0 ? acc() : '#FF5D73';
-    betCard = '<a href="#apuestas" class="row in press" style="--d:.2s;padding:14px 16px;border-radius:24px;background:var(--s1);border:1px solid var(--line);color:var(--tx);gap:14px">' +
-      '<span class="ico" style="background:rgba(255,93,115,.13);color:#FF5D73">' + icon('ticket', 20) + '</span>' +
-      '<span class="col grow" style="gap:2px"><span class="small muted">Apuestas · balance de ' + MONTHS[mo] + '</span><span class="num" style="font-size:18px;font-weight:600;color:' + col + '">' + eur(net, 2, true) + '</span></span>' +
-      (pts.length > 1 ? '<svg width="90" height="36" viewBox="0 0 90 36" fill="none" aria-hidden="true"><path d="M0 ' + (4 + mxv / ((mxv - mn) || 1) * 28).toFixed(1) + 'H90" stroke="#2C2C33" stroke-dasharray="3 4"/><polyline class="draw" points="' + pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') + '" stroke="' + col + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:' + (len * 1.1).toFixed(0) + ' 0;--d:.8s"/></svg>' : '') +
-      '<span style="color:#6E6E78">' + icon('chevron-right', 16, 2.4) + '</span></a>';
   }
 
   const tiles = budg.map((c, i) => {
@@ -392,31 +389,23 @@ function scrInicio() {
     '<header class="between in" style="align-items:center"><div class="row"><div aria-hidden="true" style="width:46px;height:46px;border-radius:50%;padding:2px;background:conic-gradient(' + acc() + ',#8B7CFF,' + acc() + ')"><div style="width:100%;height:100%;border-radius:50%;background:#16161A;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:16px;font-weight:600">' + esc((S.data.config.nombre || 'C').charAt(0)) + '</div></div>' +
     '<div class="col" style="gap:1px"><span class="muted" style="font-size:13px">' + hello + '</span><span style="font-size:18px;font-weight:700">' + esc(S.data.config.nombre || 'Carlos') + '</span></div></div>' + syncChip() + '</header>' +
     '<div class="between in" style="--d:.04s;align-items:center"><h1>' + cap(MONTHS[mo]) + '</h1><a href="#mensual" class="chip" style="color:var(--tx)">' + icon('sheet', 15, 2.2) + 'Resumen</a></div>' + banner +
-    '<section class="in" aria-label="Puedes gastar hoy" style="--d:.08s;position:relative;overflow:hidden;border-radius:30px;padding:22px 20px;background:' + acc() + ';color:#0B0B0D;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 18px 40px ' + rgba(acc(), 0.22) + '">' +
+    '<section class="in oncolor" aria-label="Puedes gastar hoy" style="--d:.08s;position:relative;overflow:hidden;border-radius:30px;padding:22px 20px;background:var(--mood);color:#0B0B0D;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 18px 40px var(--moodglow);transition:background-color .5s">' +
     '<div aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:35%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.45),rgba(255,255,255,0));animation:shimmer 4s ease-in-out 1.6s infinite"></div>' +
-    '<div class="col" style="position:relative;gap:4px"><span style="font-size:13px;font-weight:800">Puedes gastar hoy</span><span class="num" data-count="' + today.toFixed(2) + '" data-suffix=" €" style="font-size:42px;font-weight:700;letter-spacing:-1.8px">' + eur(today) + '</span>' +
-    '<span style="font-size:12px;font-weight:600;opacity:.72">' + (S.mood === 'bad' && S.prefs.mood !== false ? 'Te has pasado del presupuesto del mes. ' : S.mood === 'warn' && S.prefs.mood !== false ? 'Vas por encima de tu ritmo. ' : '') + eur(Math.max(0, remaining), 0) + ' para los ' + daysLeft + ' días que quedan.' + (pendNames.length ? ' Ya descuenta ' + esc(pendNames.join(', ')) + '.' : '') + '</span></div>' +
+    '<div class="col" style="position:relative;gap:4px"><span style="font-size:13px;font-weight:800">Puedes gastar hoy</span><span class="num" data-count="' + today.toFixed(2) + '" data-big data-count-key="today" style="font-size:42px;font-weight:700;letter-spacing:-1.8px">' + eurBig(today) + '</span>' +
+    '<span style="font-size:12px;font-weight:600;opacity:.72">' + (remaining < 0 ? 'Te has pasado ' + eur(-remaining, 0) + ' del presupuesto del mes.' : (S.mood === 'warn' && S.prefs.mood !== false ? 'Vas por encima de tu ritmo. ' : '') + eur(remaining, 0) + ' para los ' + daysLeft + ' días que quedan.') + (pendNames.length ? ' Ya descuenta ' + esc(pendNames.join(', ')) + '.' : '') + '</span></div>' +
     '<div aria-hidden="true" style="position:relative;width:64px;height:64px;flex-shrink:0;animation:floaty 3.2s ease-in-out infinite">' + ring(64, 6, daysLeft / dim * 100, '#0B0B0D', 0.6, 'rgba(11,11,13,.14)') +
     '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1"><span class="num" style="font-size:16px;font-weight:700">' + daysLeft + '</span><span style="font-size:9px;font-weight:800">días</span></div></div></section>' +
 
-    '<section class="card hero in" aria-label="Resumen del mes" style="--d:.14s;display:flex;flex-direction:column;gap:16px;padding:22px 16px 16px">' +
-    '<div style="position:relative;width:300px;max-width:100%;height:176px;align-self:center"><svg viewBox="0 0 300 176" width="100%" height="176" fill="none" role="img" aria-label="Has gastado el ' + Math.round(pct) + ' % de la nómina">' +
-    '<defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="' + acc() + '"/><stop offset="1" stop-color="#6BFFC8"/></linearGradient></defs>' +
-    '<path d="M20 150 A130 130 0 0 1 280 150" stroke="#232328" stroke-width="18" stroke-linecap="round"/>' +
-    '<path class="draw" d="M20 150 A130 130 0 0 1 280 150" stroke="url(#gg)" stroke-width="18" stroke-linecap="round" style="stroke-dasharray:' + (pct / 100 * 408.4).toFixed(1) + ' 1000;--d:.4s"/>' +
-    '<circle class="fade" cx="' + mx + '" cy="' + my + '" r="7" fill="#0B0B0D" stroke="#F4F4F5" stroke-width="3" style="--d:1.3s"/></svg>' +
-    '<div class="col" style="position:absolute;left:0;right:0;bottom:4px;align-items:center;gap:4px"><span style="font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--tx3)">Gastado</span>' +
-    '<span class="num" data-count="' + spent.toFixed(2) + '" data-suffix=" €" style="font-size:34px;font-weight:600;letter-spacing:-1.4px">' + eur(spent) + '</span><span class="muted" style="font-size:13px">de ' + eur(nomina, 0) + ' de ingresos · día ' + day + ' de ' + dim + '</span></div></div>' +
-    '<div class="row fade" style="--d:1.1s;justify-content:center;gap:18px;font-size:12px;color:var(--tx2)"><span class="row" style="gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:' + acc() + '"></span>' + Math.round(pct) + ' % de la nómina</span><span class="row" style="gap:6px"><span style="width:8px;height:8px;border-radius:50%;border:2px solid var(--tx)"></span>' + Math.round(mpct) + ' % del mes</span></div>' +
-    '<div class="grid3"><div class="mini in" style="--d:.55s;background:' + rgba(acc(), 0.07) + ';border-color:' + rgba(acc(), 0.16) + '"><span class="l">Ahorro previsto</span><span class="v" style="color:' + (saveP >= 0 ? acc() : '#FF5D73') + '">' + (saveP >= 0 ? '~' : '') + fmt(saveP, 0) + ' €</span></div>' +
-    '<div class="mini in" style="--d:.62s"><span class="l">Media al día</span><span class="v">' + fmt(daily) + ' €</span></div>' +
-    '<div class="mini in" style="--d:.69s"><span class="l">Fijos apartados</span><span class="v">' + fmt(ap, 0) + ' €</span></div></div>' +
-    '<div class="grid3" style="margin-top:-6px"><div class="mini in" style="--d:.74s"><span class="l">Ingresos</span><span class="v" style="font-size:14px">' + fmt(md.income, 0) + ' €</span></div>' +
-    '<div class="mini in" style="--d:.78s"><span class="l">Movimientos</span><span class="v" style="font-size:14px">' + md.movs.length + '</span></div>' +
-    '<div class="mini in" style="--d:.82s"><span class="l">Gasto mayor</span><span class="v" style="font-size:14px">' + fmt(Math.max(0, ...md.gastos.map((g) => g.importe)), 0) + ' €</span></div></div></section>' +
+    // % de la nómina: una línea bajo la tarjeta
+    '<div class="col in" style="--d:.12s;gap:7px;padding:0 4px;margin-top:-8px" role="img" aria-label="Has gastado el ' + Math.round(pct) + ' % de la nómina; vas por el ' + Math.round(mpct) + ' % del mes">' +
+    '<div style="position:relative;height:6px;border-radius:3px;background:#232328"><i class="growx" style="position:absolute;left:0;top:0;bottom:0;width:' + pct.toFixed(1) + '%;border-radius:3px;background:' + acc() + ';transform-origin:left;--d:.3s"></i><span style="position:absolute;top:-4px;left:calc(' + mpct.toFixed(1) + '% - 1px);width:2px;height:14px;border-radius:1px;background:var(--tx)"></span></div>' +
+    '<div class="between small" style="align-items:center"><span style="color:var(--tx2);font-weight:700">' + Math.round(pct) + ' % de la nómina gastado</span><span class="muted">' + Math.round(mpct) + ' % del mes</span></div></div>' +
+
+    '<div class="grid3"><div class="mini in" style="--d:.16s;background:' + rgba(acc(), 0.07) + ';border-color:' + rgba(acc(), 0.16) + '"><span class="l">Ahorro previsto</span><span class="v" style="color:' + (saveP >= 0 ? acc() : '#FF5D73') + '">' + (saveP >= 0 ? '~' : '') + fmt(saveP, 0) + ' €</span></div>' +
+    '<div class="mini in" style="--d:.2s"><span class="l">Media al día</span><span class="v">' + fmt(daily) + ' €</span></div>' +
+    '<div class="mini in" style="--d:.24s"><span class="l">Fijos apartados</span><span class="v">' + fmt(ap, 0) + ' €</span></div></div>' +
 
     curveHTML(y, mo, day) +
-    betCard +
     (tiles ? '<section class="col in" style="--d:.26s;gap:12px"><div class="between"><h2>Presupuestos</h2><span class="muted" style="font-size:13px">' + fmt(spentBudg) + ' / ' + fmt(budgetTotal, 0) + ' €</span></div><div class="hscroll">' + tiles + '</div></section>' : '') +
 
     '<section class="col in" style="--d:.32s;gap:10px"><div class="between"><h2>Últimos movimientos</h2><a href="#movs" style="font-size:13px;font-weight:700">Ver todo</a></div>' +
@@ -444,7 +433,7 @@ function scrMovs() {
     '<header class="between in" style="align-items:center"><h1>Movimientos</h1><button class="ibtn" data-act="export" aria-label="Exportar a CSV">' + icon('download', 18, 2.2) + '</button></header>' +
     '<div class="between in" style="--d:.03s;align-items:center"><button class="ibtn" data-act="mov-month" data-v="-1" aria-label="Mes anterior">' + icon('chevron-left', 18, 2.4) + '</button>' +
     '<span style="font-size:16px;font-weight:800">' + cap(MONTHS[m]) + ' ' + y + '</span><button class="ibtn" data-act="mov-month" data-v="1" aria-label="Mes siguiente" ' + (S.ui.movMonth >= 0 ? 'disabled style="opacity:.35"' : '') + '>' + icon('chevron-right', 18, 2.4) + '</button></div>' +
-    '<div class="grid3 in" style="--d:.06s"><div class="mini"><span class="l">Gastos</span><span class="v" style="font-size:15px">' + fmt(md.cash, 0) + ' €</span></div><div class="mini"><span class="l">Ingresos</span><span class="v" style="font-size:15px;color:' + acc() + '">' + fmt(md.income, 0) + ' €</span></div><div class="mini"><span class="l">Apuestas</span><span class="v" style="font-size:15px">' + fmt(md.ret - md.dep, 0, true) + ' €</span></div></div>' +
+    '<div class="grid3 in" style="--d:.06s"><div class="mini"><span class="l">Gastos</span><span class="v" style="font-size:15px">' + fmt(md.cash, 0) + ' €</span></div><div class="mini"><span class="l">Ingresos</span><span class="v" style="font-size:15px;color:' + acc() + '">' + fmt(md.income, 0) + ' €</span></div><div class="mini"><span class="l">Ahorro</span><span class="v" style="font-size:15px;color:' + (md.income - md.cash >= 0 ? acc() : '#FF5D73') + '">' + fmt(md.income - md.cash, 0, true) + ' €</span></div></div>' +
     '<label class="in" style="--d:.09s;position:relative;display:flex"><span class="sr">Buscar</span><span style="position:absolute;left:15px;top:15px;color:#8A8A94">' + icon('search', 18, 2.2) + '</span>' +
     '<input class="input" type="search" data-inp="movQ" data-live="mov-search" value="' + esc(S.ui.movQ) + '" placeholder="Buscar por concepto, categoría o nota" style="padding-left:44px"></label>' +
     '<div class="hscroll in" role="group" aria-label="Filtrar" style="--d:.12s;gap:8px">' + chips + '</div>' +
@@ -482,61 +471,157 @@ function movListHTML() {
 /* ---------- Pantalla: Añadir ---------- */
 
 function newAdd(tipo = 'gasto') {
-  const first = tipo === 'apuesta' ? (activeRetos()[0] ? activeRetos()[0].nombre : 'Suelta') : ((catsOf(tipo)[0] || {}).nombre || 'Otros');
-  return { id: null, tipo, amount: '0', cat: first, concepto: '', nota: '', fecha: isoLocal(new Date()), flag: false, ticket: null, ticketUrl: '', origen: 'manual', saved: false };
+  const first = tipo === 'apuesta' ? (activeRetos()[0] ? activeRetos()[0].nombre : 'Suelta') : ((catsByUse(tipo)[0] || {}).nombre || 'Otros');
+  return { id: null, tipo, amount: '0', cat: first, concepto: '', nota: '', fecha: isoLocal(new Date()), flag: false, ticket: null, ticketUrl: '', origen: 'manual', saved: false, catManual: false, ruleHint: '' };
 }
 function activeRetos() { return S.data.retos.filter((r) => r.estado !== 'perdido' && r.estado !== 'terminado'); }
-function scrAdd() {
-  const a = S.ui.add;
-  const isBet = a.tipo === 'apuesta';
-  const types = [['gasto', 'Gasto'], ['ingreso', 'Ingreso'], ['apuesta', 'Apuesta']];
-  const ti = types.findIndex((t) => t[0] === a.tipo);
-  const knobBg = a.tipo === 'ingreso' ? acc() : (isBet ? '#FF5D73' : 'var(--tx)');
-  let options;
-  if (isBet) options = activeRetos().map((r) => ({ nombre: r.nombre, icono: 'trophy', color: '#FF9F5A' })).concat([{ nombre: 'Suelta', icono: 'ticket', color: '#A78BFA' }]);
-  else options = catsOf(a.tipo);
-  const cur = options.find((o) => o.nombre === a.cat) || options[0] || { color: '#9C9CA6' };
-  const cats = options.map((o) => {
+// Categorías ordenadas por uso de los últimos 60 días (las más usadas, a mano)
+function catsByUse(tipo) {
+  const since = Date.now() - 60 * 864e5, cnt = {};
+  S.data.movs.forEach((m) => { if (m.tipo !== tipo) return; const d = parseD(m.fecha); if (d && d.getTime() >= since) cnt[m.categoria] = (cnt[m.categoria] || 0) + 1; });
+  return catsOf(tipo).slice().sort((a, b) => (cnt[b.nombre] || 0) - (cnt[a.nombre] || 0) || a.orden - b.orden);
+}
+// Recientes: los 4 pares concepto + categoría más repetidos en 60 días.
+// El importe solo se propone si ese mismo importe se ha repetido 3 veces o más.
+function recientes(tipo) {
+  const since = Date.now() - 60 * 864e5, map = {};
+  const valid = new Set(catsOf(tipo).map((c) => c.nombre));
+  S.data.movs.forEach((m) => {
+    if (m.tipo !== tipo || !m.concepto || !valid.has(m.categoria)) return;
+    const d = parseD(m.fecha); if (!d || d.getTime() < since) return;
+    const nc = normTxt(m.concepto); if (!nc || nc === normTxt(m.categoria)) return;
+    const k = nc + '|' + m.categoria;
+    const e = map[k] || (map[k] = { concepto: m.concepto, cat: m.categoria, n: 0, last: '', imps: {} });
+    e.n++;
+    const ik = Number(m.importe).toFixed(2); e.imps[ik] = (e.imps[ik] || 0) + 1;
+    if (String(m.fecha) > e.last) { e.last = String(m.fecha); e.concepto = m.concepto; }
+  });
+  return Object.values(map).filter((e) => e.n >= 2)
+    .sort((a, b) => b.n - a.n || b.last.localeCompare(a.last)).slice(0, 4)
+    .map((e) => { const top = Object.entries(e.imps).sort((a, b) => b[1] - a[1])[0]; return { concepto: e.concepto, cat: e.cat, importe: e.n >= 3 && top[1] >= 3 ? Number(top[0]) : 0 }; });
+}
+// La misma regla que usa Apple Pay en Code.gs: palabra del comercio dentro del concepto
+function ruleFor(concepto) {
+  const t = ' ' + normTxt(concepto) + ' ';
+  if (t.trim().length < 2) return null;
+  for (const r of S.data.reglas) {
+    for (const raw of String(r.patrones || '').split(',')) {
+      const p = normTxt(raw); if (!p) continue;
+      if (new RegExp('(^|[^a-z0-9])' + p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)').test(t)) return { cat: r.categoria, pat: p };
+    }
+  }
+  return null;
+}
+function addOptions(a) {
+  if (a.tipo === 'apuesta') return activeRetos().map((r) => ({ nombre: r.nombre, icono: 'trophy', color: '#FF9F5A' })).concat([{ nombre: 'Suelta', icono: 'ticket', color: '#A78BFA' }]);
+  return catsByUse(a.tipo);
+}
+function catRowHTML(a, options) {
+  return options.map((o) => {
     const on = o.nombre === a.cat;
     return '<button class="catbtn' + (on ? ' on' : '') + '" data-act="add-cat" data-v="' + esc(o.nombre) + '" aria-pressed="' + on + '">' +
       '<span class="b" style="background:' + (on ? o.color : rgba(o.color, 0.12)) + ';color:' + (on ? '#0B0B0D' : o.color) + ';border-color:' + (on ? rgba(o.color, 0.5) : 'transparent') + ';box-shadow:' + (on ? '0 10px 24px ' + rgba(o.color, 0.35) : 'none') + '">' + icon(o.icono, 22) + '</span><span>' + esc(o.nombre) + '</span></button>';
   }).join('');
+}
+function updateAddCats() {
+  const a = S.ui.add; if (!a) return;
+  const options = addOptions(a);
+  const row = $('#catrow'); if (row) row.innerHTML = catRowHTML(a, options);
+  const cur = options.find((o) => o.nombre === a.cat) || { color: '#9C9CA6' };
+  const lbl = $('#addcatlbl'); if (lbl) { lbl.innerHTML = '<span class="dot" style="background:' + cur.color + '"></span>' + esc(a.cat); lbl.classList.remove('flash'); void lbl.offsetWidth; lbl.classList.add('flash'); }
+  const on = $('#catrow .catbtn.on'); if (on && on.scrollIntoView) on.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+}
+function addWhen(a) {
+  const d = parseD(a.fecha) || new Date();
+  const dd = dayDiff(d, new Date());
+  return (dd === 0 ? 'Hoy' : dd === 1 ? 'Ayer' : d.getDate() + ' ' + MONTHS_S[d.getMonth()]) + ' ' + hhmm(a.fecha);
+}
+function addPreview(a) { return a.ticket ? a.ticket.preview : (a.id && S.previews[a.id]) || (a.id && S.tickets[a.id]) || ''; }
+// Fila «Detalles»: resume lo que hay dentro. Con nota o foto se muestra ampliada.
+function detRowHTML(a) {
+  const isBet = a.tipo === 'apuesta';
+  const photo = !!(a.ticket || a.ticketUrl);
+  const extra = isBet ? (a.flag ? 'cobro' : 'depósito') : (a.flag ? 'cada mes' : '');
+  if (a.nota || photo) {
+    const pv = addPreview(a);
+    const thumb = photo ? (pv ? '<img class="thumb" src="' + pv + '" alt="Foto del ticket">' : '<span class="thumb">' + icon('receipt', 22) + '</span>') : '<span class="b">' + icon('sliders-horizontal', 18) + '</span>';
+    return '<button class="detrow" data-act="add-det" aria-label="Detalles" style="align-items:flex-start">' + thumb +
+      '<span class="col grow" style="gap:2px;padding-top:2px"><b style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(a.concepto || 'Detalles') + '</b>' +
+      (a.nota ? '<span class="s" style="color:var(--tx2)">' + esc(a.nota) + '</span>' : '') +
+      '<span class="s">' + esc(addWhen(a)) + (photo ? ' · ticket' : '') + (extra ? ' · ' + extra : '') + '</span></span>' +
+      '<span style="color:var(--tx4);padding-top:4px">' + icon('pencil', 16) + '</span></button>';
+  }
+  const parts = [];
+  if (a.concepto) parts.push(a.concepto);
+  if (a.concepto || extra || a.id) parts.push(addWhen(a));
+  if (extra) parts.push(extra);
+  const sub = parts.length ? parts.join(' · ') : addWhen(a) + ' · concepto, nota, foto';
+  return '<button class="detrow" data-act="add-det" aria-label="Detalles"><span class="b">' + icon('sliders-horizontal', 18) + '</span>' +
+    '<span class="col grow" style="gap:1px"><b style="font-size:14px">Detalles</b><span class="s">' + esc(sub) + '</span></span>' +
+    '<span style="color:var(--tx4)">' + icon('chevron-right', 16, 2.4) + '</span></button>';
+}
+function scrAdd() {
+  const a = S.ui.add;
+  const isBet = a.tipo === 'apuesta'; // solo al editar una apuesta antigua
+  const types = [['gasto', 'Gasto'], ['ingreso', 'Ingreso']];
+  const ti = Math.max(0, types.findIndex((t) => t[0] === a.tipo));
+  const options = addOptions(a);
+  const cur = options.find((o) => o.nombre === a.cat) || options[0] || { color: '#9C9CA6' };
   const amtColor = a.tipo === 'ingreso' || (isBet && a.flag) ? acc() : 'var(--tx)';
-  const flagTitle = isBet ? 'Es un cobro' : 'Repetir cada mes';
-  const flagSub = isBet ? (a.flag ? 'Dinero que retiras de la casa' : 'Ahora cuenta como depósito') : (a.flag ? 'Se añadirá a Fijos y suscripciones' : 'Movimiento puntual');
-  const flagColor = isBet ? acc() : '#8B7CFF';
-  const preview = a.ticket ? a.ticket.preview : (a.ticketUrl && S.previews[a.id]) || '';
+  const recs = !a.id && !isBet ? recientes(a.tipo) : [];
+  const empty = a.amount === '0' || a.amount === '';
+  const recHTML = recs.length ? '<div class="recs in" role="group" aria-label="Recientes" style="--d:.07s">' + recs.map((r, i) => {
+    const c = cat(r.cat);
+    return '<button class="chip" data-act="add-rec" data-i="' + i + '"><span class="b" style="background:' + rgba(c.color, 0.14) + ';color:' + c.color + '">' + icon(c.icono, 14, 2.2) + '</span>' + esc(r.concepto) + (r.importe && empty ? ' <em>' + fmt(r.importe) + '</em>' : '') + '</button>';
+  }).join('') + '</div>' : '';
+  const head = isBet ?
+    '<div class="grow row" style="justify-content:center"><span class="chip" style="color:#FF8A9A">' + icon('ticket', 15, 2.2) + 'Apuesta (historial)</span></div>' :
+    '<div class="seg grow" role="group" aria-label="Tipo" style="grid-template-columns:repeat(2,minmax(0,1fr))"><span class="knob" style="width:calc((100% - 8px)/2);left:calc(4px + ' + ti + ' * (100% - 8px)/2);background:' + (a.tipo === 'ingreso' ? acc() : 'var(--tx)') + '"></span>' +
+    types.map((t) => '<button class="' + (t[0] === a.tipo ? 'on' : '') + '" data-act="add-type" data-v="' + t[0] + '" aria-pressed="' + (t[0] === a.tipo) + '">' + t[1] + '</button>').join('') + '</div>';
+  return '<div class="page addpg">' +
+    '<div class="glow" aria-hidden="true" style="top:40px;left:50%;margin-left:-180px;width:360px;height:240px;background:radial-gradient(ellipse,' + rgba(cur.color, 0.15) + ',rgba(0,0,0,0) 68%);animation:none"></div>' +
+    '<header class="row in" style="gap:10px"><a href="#' + (a.id ? 'movs' : S.prevRoute || 'inicio') + '" class="ibtn" aria-label="Cerrar">' + icon('x', 18, 2.4) + '</a>' + head +
+    (a.id ? '<button class="ibtn" data-act="mov-del" data-id="' + esc(a.id) + '" aria-label="Borrar movimiento" style="color:#FF8A9A">' + icon('trash-2', 18) + '</button>' : '') + '</header>' +
+    (a.id ? '<p class="small in" style="margin:-4px 0 -4px;text-align:center;color:#C3B9FF;font-weight:700">Editando movimiento</p>' : '') +
+    '<div class="col in" aria-live="polite" style="--d:.04s;align-items:center;gap:2px">' +
+    '<div class="row" style="gap:3px"><span id="amt" class="num amtv" style="font-weight:600;line-height:1.08;color:' + amtColor + ';display:inline-block">' + esc(a.amount) + '</span>' +
+    '<span class="amtcur" aria-hidden="true" style="width:3px;border-radius:2px;background:' + acc() + ';animation:blink 1s infinite"></span><span class="num" style="font-size:26px;font-weight:500;color:var(--tx4);margin-left:5px">€</span></div>' +
+    '<span id="addcatlbl" class="row" style="gap:6px;font-size:13px;font-weight:700;color:var(--tx2);padding:2px 8px;border-radius:10px"><span class="dot" style="background:' + cur.color + '"></span>' + esc(a.cat) + (a.concepto && a.concepto !== a.cat ? '<span class="muted" style="font-weight:600">· ' + esc(a.concepto) + '</span>' : '') + '</span></div>' +
+    recHTML +
+    '<div id="catrow" class="catgrid in" role="group" aria-label="Categoría" style="--d:.1s">' + catRowHTML(a, options) + '</div>' +
+    '<div class="in" style="--d:.13s">' + detRowHTML(a) + '</div>' +
+    '<div style="flex:1 1 0;min-height:0"></div>' +
+    '<div class="keys in" role="group" aria-label="Teclado numérico" style="--d:.16s">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'].map((k) => '<button data-act="key" data-v="' + k + '" aria-label="' + (k === '⌫' ? 'Borrar' : k === ',' ? 'Coma decimal' : k) + '">' + k + '</button>').join('') + '</div>' +
+    '<button id="savebtn" class="btn block in savebtn" data-act="add-save" style="--d:.2s;min-height:58px;font-size:16px;position:relative;overflow:hidden;flex-shrink:0;box-shadow:0 14px 34px ' + rgba(acc(), 0.28) + '">' +
+    '<span aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:70px;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));animation:shimmer 3.4s ease-in-out 1s infinite"></span>' +
+    '<span style="position:relative">' + (a.id ? 'Guardar cambios' : a.tipo === 'ingreso' ? 'Guardar ingreso' : 'Guardar gasto') + '</span></button>' +
+    '</div>';
+}
+function detallesSheetHTML() {
+  const a = S.ui.add;
+  if (!a) return '';
+  const isBet = a.tipo === 'apuesta';
+  const pv = addPreview(a);
   const ticketBlock = (a.ticket || a.ticketUrl) ?
-    '<div class="row" style="padding:10px;border-radius:20px;background:var(--s1);border:1px solid rgba(90,200,255,.3)">' +
-    (preview ? '<img src="' + preview + '" alt="Foto del ticket" style="width:56px;height:56px;border-radius:12px;object-fit:cover">' : '<span class="ico" style="background:rgba(90,200,255,.14);color:#5AC8FF">' + icon('receipt', 22) + '</span>') +
+    '<div class="row" style="padding:10px;border-radius:20px;background:#0F0F12;border:1px solid rgba(90,200,255,.3)">' +
+    (pv ? '<img src="' + pv + '" alt="Foto del ticket" style="width:56px;height:56px;border-radius:12px;object-fit:cover">' : '<span class="ico" style="background:rgba(90,200,255,.14);color:#5AC8FF">' + icon('receipt', 22) + '</span>') +
     '<span class="col grow" style="gap:2px"><b style="font-size:14px">Ticket adjunto</b><span class="small muted">' + (a.ticket ? 'Se subirá a tu Drive al guardar' : 'Guardado en tu Drive') + '</span></span>' +
     '<button class="ibtn" data-act="ticket-pick" aria-label="Cambiar foto">' + icon('camera', 18) + '</button><button class="ibtn" data-act="ticket-clear" aria-label="Quitar foto">' + icon('x', 18, 2.4) + '</button></div>' :
-    '<button class="btn dash block" data-act="ticket-pick" style="min-height:52px">' + icon('camera', 18) + 'Foto del ticket</button>';
-  return '<div class="page" style="gap:16px;padding-bottom:calc(var(--safe-b) + 24px)">' +
-    '<div class="glow" aria-hidden="true" style="top:50px;left:50%;margin-left:-180px;width:360px;height:260px;background:radial-gradient(ellipse,' + rgba(cur.color, 0.15) + ',rgba(0,0,0,0) 68%);animation:none"></div>' +
-    '<header class="row in"><a href="#' + (a.id ? 'movs' : S.prevRoute || 'inicio') + '" class="ibtn" aria-label="Cerrar">' + icon('x', 18, 2.4) + '</a>' +
-    '<div class="seg grow" role="group" aria-label="Tipo" style="grid-template-columns:repeat(3,minmax(0,1fr))"><span class="knob" style="width:calc((100% - 8px)/3);left:calc(4px + ' + ti + ' * (100% - 8px)/3);background:' + knobBg + '"></span>' +
-    types.map((t) => '<button class="' + (t[0] === a.tipo ? 'on' : '') + '" data-act="add-type" data-v="' + t[0] + '" aria-pressed="' + (t[0] === a.tipo) + '" style="font-size:13px">' + t[1] + '</button>').join('') + '</div></header>' +
-    (a.id ? '<p class="small in" style="margin:-6px 0 0;text-align:center;color:#C3B9FF">Editando movimiento</p>' : '') +
-    '<div class="col in" aria-live="polite" style="--d:.05s;align-items:center;gap:6px;padding:4px 0">' +
-    '<div class="row" style="gap:4px"><span id="amt" class="num" style="font-size:56px;font-weight:600;letter-spacing:-2.5px;color:' + amtColor + ';display:inline-block">' + esc(a.amount) + '</span>' +
-    '<span aria-hidden="true" style="width:3px;height:48px;border-radius:2px;background:' + acc() + ';animation:blink 1s infinite"></span><span class="num" style="font-size:28px;font-weight:500;color:var(--tx4);margin-left:6px">€</span></div>' +
-    '<span class="muted" style="font-size:13px;font-weight:600">' + esc(a.cat) + (isBet ? (a.flag ? ' · cobro' : ' · depósito') : (a.flag ? ' · cada mes' : '')) + '</span></div>' +
-    '<div class="catgrid in" role="group" aria-label="Categoría" style="--d:.1s">' + cats + '</div>' +
-    '<div class="grid2 in" style="--d:.14s"><label class="field"><span>Concepto</span><input class="input" data-inp="add.concepto" value="' + esc(a.concepto) + '" placeholder="Repsol, Mercadona…"></label>' +
-    '<label class="field"><span>Fecha y hora</span><input class="input" type="datetime-local" data-inp="add.fecha" value="' + esc(a.fecha) + '" style="font-size:14px"></label></div>' +
-    '<label class="field in" style="--d:.17s"><span>Nota</span><input class="input" data-inp="add.nota" value="' + esc(a.nota) + '" placeholder="Opcional"></label>' +
-    '<div class="in" style="--d:.2s">' + ticketBlock + '</div>' +
-    (a.id && !isBet ? '' : '<button class="toggle in" data-act="add-flag" aria-pressed="' + a.flag + '" style="--d:.23s;border-color:' + (a.flag ? rgba(flagColor, 0.4) : 'var(--line)') + '">' +
+    '<button class="btn dash block" data-act="ticket-pick" style="min-height:50px">' + icon('camera', 18) + 'Foto del ticket</button>';
+  const flagTitle = isBet ? 'Es un cobro' : 'Repetir cada mes';
+  const flagSub = isBet ? (a.flag ? 'Dinero que retiraste de la casa' : 'Cuenta como depósito') : (a.flag ? 'Se añadirá a Fijos y suscripciones' : 'Movimiento puntual');
+  const flagColor = isBet ? acc() : '#8B7CFF';
+  return '<h2>Detalles</h2>' +
+    '<label class="field"><span>Concepto</span><input id="addconcepto" class="input" data-inp="add.concepto" data-live="add-concepto" value="' + esc(a.concepto) + '" placeholder="Repsol, Mercadona…" autocomplete="off"></label>' +
+    '<span id="rulehint" class="small" style="margin-top:-8px;color:#C9F23A;font-weight:700;' + (a.ruleHint ? '' : 'display:none') + '">' + esc(a.ruleHint || '') + '</span>' +
+    '<label class="field"><span>Fecha y hora</span><input class="input" type="datetime-local" data-inp="add.fecha" value="' + esc(a.fecha) + '"></label>' +
+    '<label class="field"><span>Nota</span><input class="input" data-inp="add.nota" value="' + esc(a.nota) + '" placeholder="Opcional"></label>' +
+    ticketBlock +
+    (a.id && !isBet ? '' : '<button class="toggle" data-act="add-flag" aria-pressed="' + a.flag + '" style="border-color:' + (a.flag ? rgba(flagColor, 0.4) : 'var(--line)') + ';background:#0F0F12">' +
       '<span class="ico" style="width:38px;height:38px;border-radius:13px;background:' + (a.flag ? flagColor : 'rgba(255,255,255,.05)') + ';color:' + (a.flag ? '#0B0B0D' : 'var(--tx3)') + '">' + icon(isBet ? 'banknote' : 'repeat', 18, 2.2) + '</span>' +
       '<span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:700">' + flagTitle + '</span><span class="small muted">' + flagSub + '</span></span>' +
       '<span class="switch' + (a.flag ? ' on' : '') + '" style="' + (a.flag ? 'background:' + flagColor : '') + '"></span></button>') +
-    '<div class="keys in" role="group" aria-label="Teclado numérico" style="--d:.26s">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'].map((k) => '<button data-act="key" data-v="' + k + '" aria-label="' + (k === '⌫' ? 'Borrar' : k === ',' ? 'Coma decimal' : k) + '">' + k + '</button>').join('') + '</div>' +
-    '<button id="savebtn" class="btn block in" data-act="add-save" style="--d:.3s;min-height:58px;font-size:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px ' + rgba(acc(), 0.28) + '">' +
-    '<span aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:70px;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));animation:shimmer 3.4s ease-in-out 1s infinite"></span>' +
-    '<span style="position:relative">' + (a.id ? 'Guardar cambios' : isBet ? 'Guardar apuesta' : a.tipo === 'ingreso' ? 'Guardar ingreso' : 'Guardar gasto') + '</span></button>' +
-    (a.id ? '<button class="btn ghost block" data-act="mov-del" data-id="' + esc(a.id) + '" style="color:#FF8A9A">' + icon('trash-2', 18) + 'Borrar movimiento</button>' : '') +
-    '</div>';
+    '<button class="btn block" data-act="sheet-close" style="background:var(--tx)">Listo</button>';
 }
 
 /* ---------- Pantalla: Objetivos ---------- */
@@ -607,9 +692,8 @@ function scrMas() {
     ['Tu dinero', [
       ['mensual', 'Resumen mes a mes', 'Ingresos, gastos y ahorro de cada mes', '#D4FF3A', 'sheet'],
       ['analisis', 'Análisis', 'Gráficos, categorías y mapa de calor', '#5AC8FF', 'trending-up'],
-      ['simulador', 'Simulador de hipoteca', 'Cuánto necesitas y cuándo llegas', '#FDBA74', 'house'],
       ['fijos', 'Fijos y suscripciones', nc ? 'Próximo: ' + nc.f.nombre + ', ' + nc.d.getDate() + ' ' + MONTHS_S[nc.d.getMonth()] : 'Añade tus pagos fijos', '#FFB84D', 'calendar-clock', nc && dayDiff(new Date(), nc.d) <= 3 ? (dayDiff(new Date(), nc.d) === 0 ? 'Hoy' : dayDiff(new Date(), nc.d) + ' d') : ''],
-      ['apuestas', 'Apuestas', allBets.length ? 'Balance total: ' + eur(betNet, 2, true) : 'Depósitos, cobros y retos', '#FF5D73', 'ticket']
+      ['apuestas', 'Apuestas', allBets.length ? 'Historial · balance total ' + eur(betNet, 2, true) : 'Historial (sin movimientos)', '#FF5D73', 'ticket']
     ]],
     ['Automático', [
       ['applepay', 'Apple Pay y Siri', S.cfg.demo ? 'Configúralo cuando conectes tu Sheet' : autos + ' pagos apuntados solos este mes', '#8B7CFF', 'zap']
@@ -700,8 +784,8 @@ function scrStats() {
     const outer = Math.max(6, Math.round(b.total / max * 150)), inner = Math.round(b.actual / max * 150);
     return '<button data-act="stats-bar" data-i="' + i + '" aria-pressed="' + on + '" aria-label="' + b.label + ': ' + fmt(b.actual, 0) + ' euros" style="height:210px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;border:0;background:none;padding:0">' +
       '<span style="min-height:26px;display:flex;align-items:flex-end">' + (on ? '<span class="num popin" style="font-size:11px;font-weight:600;color:#0B0B0D;background:' + acc() + ';padding:5px 7px;border-radius:8px;white-space:nowrap">' + (proj && b.actual ? fmt(b.actual, 0) + '/' + fmt(b.total, 0) : (proj ? '~' + fmt(b.total, 0) : fmt(b.actual, 0))) + ' €</span>' : '') + '</span>' +
-      '<span style="width:100%;height:' + outer + 'px;border-radius:10px;border:1.5px dashed ' + (proj ? rgba(acc(), 0.55) : 'transparent') + ';background:' + (proj ? 'repeating-linear-gradient(135deg,' + rgba(acc(), 0.14) + ' 0 6px,rgba(0,0,0,0) 6px 12px)' : 'transparent') + ';display:flex;align-items:flex-end;overflow:hidden;transform-origin:bottom;animation:' + anim + ' .8s var(--ease) ' + (0.12 + i * 0.06).toFixed(2) + 's both">' +
-      '<span style="width:100%;height:' + inner + 'px;border-radius:8px;background:' + (on ? acc() : '#2E2E35') + ';transition:background-color .3s"></span></span>' +
+      '<span style="width:100%;height:' + outer + 'px;border-radius:6px;border:1.5px dashed ' + (proj ? rgba(acc(), 0.55) : 'transparent') + ';background:' + (proj ? 'repeating-linear-gradient(135deg,' + rgba(acc(), 0.14) + ' 0 6px,rgba(0,0,0,0) 6px 12px)' : 'transparent') + ';display:flex;align-items:flex-end;overflow:hidden;transform-origin:bottom;animation:' + anim + ' .8s var(--ease) ' + (0.12 + i * 0.06).toFixed(2) + 's both">' +
+      '<span style="width:100%;height:' + inner + 'px;border-radius:6px;background:' + (on ? acc() : '#2E2E35') + ';transition:background-color .3s"></span></span>' +
       '<span style="font-size:12px;font-weight:' + (on ? 800 : 600) + ';color:' + (on ? 'var(--tx)' : '#8A8A94') + '">' + b.label + '</span></button>';
   }).join('');
 
@@ -738,7 +822,7 @@ function scrStats() {
   const segs = top.map(([name, v], i) => {
     const p = v / tot * 100, c = name === 'Resto' ? '#5C5C66' : cat(name).color;
     const on = S.ui.donutCat === null || S.ui.donutCat === name;
-    const s = '<circle class="draw" cx="88" cy="88" r="62" stroke="' + c + '" stroke-width="' + (S.ui.donutCat === name ? 24 : 20) + '" style="stroke-dasharray:' + Math.max(1, p / 100 * C - (top.length > 1 ? 3 : 0)).toFixed(1) + ' ' + C + ';stroke-dashoffset:' + (-(cum / 100) * C).toFixed(1) + ';opacity:' + (on ? 1 : 0.18) + ';transition:opacity .3s,stroke-width .3s;--d:' + (0.3 + i * 0.1).toFixed(2) + 's"/>';
+    const s = '<circle class="draw" cx="88" cy="88" r="62" stroke="' + c + '" stroke-width="' + (S.ui.donutCat === name ? 13 : 10) + '" style="stroke-dasharray:' + Math.max(1, p / 100 * C - (top.length > 1 ? 3 : 0)).toFixed(1) + ' ' + C + ';stroke-dashoffset:' + (-(cum / 100) * C).toFixed(1) + ';opacity:' + (on ? 1 : 0.18) + ';transition:opacity .3s,stroke-width .3s;--d:' + (0.3 + i * 0.1).toFixed(2) + 's"/>';
     cum += p; return s;
   }).join('');
   const picked = top.find((e) => e[0] === S.ui.donutCat);
@@ -771,7 +855,7 @@ function scrStats() {
     '<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">' + cells + '</div>' + detail +
     '<div class="row small" style="gap:6px;color:var(--tx4)"><span>Menos</span><span style="width:14px;height:14px;border-radius:4px;background:#1E1E23"></span>' + lv.map((c) => '<span style="width:14px;height:14px;border-radius:4px;background:' + c + '"></span>').join('') + '<span>Más</span></div></section>' +
     '<section class="card col in" style="--d:.22s;gap:16px;border-radius:28px"><div class="between"><h2 style="font-size:16px">¿En qué se va?</h2><span class="small muted">' + cap(MONTHS[mo]) + '</span></div>' +
-    (entries.length ? '<div style="position:relative;width:176px;height:176px;align-self:center"><svg width="176" height="176" viewBox="0 0 176 176" fill="none" style="transform:rotate(-90deg)" role="img" aria-label="Reparto por categoría"><circle cx="88" cy="88" r="62" stroke="#1E1E23" stroke-width="20"/>' + segs + '</svg>' +
+    (entries.length ? '<div style="position:relative;width:176px;height:176px;align-self:center"><svg width="176" height="176" viewBox="0 0 176 176" fill="none" style="transform:rotate(-90deg)" role="img" aria-label="Reparto por categoría"><circle cx="88" cy="88" r="62" stroke="#1E1E23" stroke-width="10"/>' + segs + '</svg>' +
       '<div class="col" style="position:absolute;inset:0;align-items:center;justify-content:center;gap:2px"><span style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">' + esc(picked ? picked[0] : 'Variables') + '</span><span class="num" style="font-size:20px;font-weight:600;letter-spacing:-.6px">' + eur(picked ? picked[1] : tot) + '</span><span class="small muted">' + (picked ? Math.round(picked[1] / tot * 100) + ' % del total' : top.length + ' categorías') + '</span></div></div><div class="grid2" style="gap:8px">' + legend + '</div>' : '<p class="muted small" style="margin:0">Sin gastos este mes todavía.</p>') + '</section>' +
     '<section class="in" style="--d:.28s;position:relative;border-radius:24px;padding:1.5px;overflow:hidden"><div aria-hidden="true" style="position:absolute;left:50%;top:50%;width:600px;height:600px;margin:-300px 0 0 -300px;background:conic-gradient(from 0deg,rgba(255,184,77,0),#FFB84D 60deg,rgba(139,124,255,0) 140deg,rgba(139,124,255,0) 220deg,#8B7CFF 290deg,rgba(255,184,77,0) 360deg);animation:spin 6s linear infinite"></div>' +
     '<div class="row" style="position:relative;align-items:flex-start;gap:12px;padding:16px;border-radius:23px;background:#17151A"><span class="ico" style="width:38px;height:38px;border-radius:12px;background:rgba(255,184,77,.12);color:#FFB84D">' + icon('lightbulb', 20) + '</span><div class="col" style="gap:4px"><b style="font-size:14px">' + insightT + '</b><span style="font-size:13px;line-height:1.45;color:#C8C8D0">' + insightB + '</span></div></div></section>' +
@@ -823,7 +907,7 @@ function scrFijos() {
       '<span style="font-size:18px;font-weight:800">' + esc(nc.f.nombre) + '</span><span style="font-size:13px;color:#C8B89A">' + cap(WD[nc.d.getDay()]) + ' ' + nc.d.getDate() + ' ' + MONTHS_S[nc.d.getMonth()] + ' · ' + eur(nc.f.importe) + '</span></div></section>';
   }
   return '<div class="page sub">' + glow('#FFB84D', -100, 'left', 380, 12) + subHeader('Fijos y suscripciones') +
-    '<section class="col in" style="--d:.05s;gap:4px"><span class="muted" style="font-size:13px">Te cuestan de media</span><div class="row" style="align-items:baseline;gap:8px"><span class="num" data-count="' + monthly.toFixed(2) + '" data-suffix=" €" style="font-size:38px;font-weight:600;letter-spacing:-1.6px">' + eur(monthly) + '</span><span style="font-size:15px;font-weight:700;color:var(--tx3)">/ mes</span></div>' +
+    '<section class="col in" style="--d:.05s;gap:4px"><span class="muted" style="font-size:13px">Te cuestan de media</span><div class="row" style="align-items:baseline;gap:8px"><span class="num" data-count="' + monthly.toFixed(2) + '" data-big style="font-size:38px;font-weight:600;letter-spacing:-1.6px">' + eurBig(monthly) + '</span><span style="font-size:15px;font-weight:700;color:var(--tx3)">/ mes</span></div>' +
     '<span class="muted" style="font-size:13px">Son ' + eur(monthly * 12) + ' al año en ' + nGasto + ' pago' + (nGasto === 1 ? '' : 's') + ' fijo' + (nGasto === 1 ? '' : 's') + '. Se apuntan solos el día del cargo.</span>' +
     (monthlyIn ? '<span class="pill" style="align-self:flex-start;margin-top:6px;font-size:12px;padding:6px 10px;color:' + acc() + ';background:' + rgba(acc(), 0.1) + '">Entran ' + eur(monthlyIn, 0) + ' al mes de media, pagas extra incluidas</span>' : '<span class="small" style="color:var(--tx4);margin-top:4px">Consejo: añade tu nómina y las pagas extra como ingresos fijos.</span>') + '</section>' + hero +
     (items ? '<section class="col in" style="--d:.2s;gap:12px"><h2>Lo que viene</h2><div class="col" style="position:relative;gap:12px;padding-left:30px"><span class="growy" style="position:absolute;left:9px;top:16px;bottom:30px;width:2px;border-radius:1px;background:linear-gradient(180deg,#FFB84D,#2C2C33 60%);transform-origin:top;--d:.4s"></span>' + items + '</div></section>' :
@@ -853,35 +937,30 @@ function scrApuestas() {
   const zy = yv(0);
   const last = pts[pts.length - 1];
   const area = 'M' + pts.map((p) => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L') + ' L' + last[0].toFixed(1) + ' ' + zy.toFixed(1) + ' L0 ' + zy.toFixed(1) + ' Z';
-  const limit = Number(S.data.config.limite_apuestas) || 0;
-  const mdep = monthData(now.getFullYear(), now.getMonth()).dep;
-  const lp = limit ? clamp(mdep / limit * 100, 0, 100) : 0;
   const retos = S.data.retos.map((r, i) => {
     const lost = r.estado === 'perdido';
     const done = r.estado === 'terminado' || r.estado === 'ganado';
     const p = lost ? 0 : clamp((r.banca - r.inicio) / ((r.objetivo - r.inicio) || 1) * 100, 0, 100);
     const hue = lost ? '#FF5D73' : done ? acc() : ['#FF9F5A', acc(), '#A78BFA'][i % 3];
-    return '<button class="card col press in" data-act="reto-open" data-id="' + esc(r.id) + '" style="--d:' + (0.28 + i * 0.08).toFixed(2) + 's;gap:12px;padding:16px;border-radius:24px;text-align:left;opacity:' + (lost ? 0.6 : 1) + '">' +
+    return '<div class="card col in" style="--d:' + (0.28 + i * 0.08).toFixed(2) + 's;gap:12px;padding:16px;border-radius:24px;text-align:left;opacity:' + (lost ? 0.6 : 1) + '">' +
       '<span class="row"><span class="ico" style="width:42px;height:42px;border-radius:14px;background:' + rgba(hue, 0.14) + ';color:' + hue + '">' + icon('trophy', 20) + '</span><span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:800">' + esc(r.nombre) + '</span><span class="small muted">De ' + fmt(r.inicio, 0) + ' € a ' + fmt(r.objetivo, 0) + ' €</span></span>' +
       '<span class="pill" style="color:' + (lost ? '#FF5D73' : acc()) + ';background:' + (lost ? 'rgba(255,93,115,.12)' : rgba(acc(), 0.1)) + '">' + cap(r.estado) + '</span></span>' +
       '<span class="col" style="gap:6px"><span class="between small" style="font-weight:700"><span class="muted">Banca: <span class="num" style="color:var(--tx);font-weight:600">' + eur(r.banca) + '</span></span><span style="color:var(--tx4)">' + Math.round(p) + ' %</span></span>' +
-      '<span class="bar"><i class="growx" style="width:' + p.toFixed(0) + '%;min-width:' + (lost ? 0 : 8) + 'px;background:' + hue + ';--d:' + (0.6 + i * 0.1).toFixed(2) + 's"></i></span></span></button>';
+      '<span class="bar"><i class="growx" style="width:' + p.toFixed(0) + '%;min-width:' + (lost ? 0 : 8) + 'px;background:' + hue + ';--d:' + (0.6 + i * 0.1).toFixed(2) + 's"></i></span></span></div>';
   }).join('');
   return '<div class="page sub">' + glow('#FF5D73', -110, 'right', 360, 12) + subHeader('Apuestas') +
     '<div class="seg in" style="--d:.03s;grid-template-columns:repeat(2,minmax(0,1fr))"><span class="knob" style="width:calc(50% - 4px);left:' + (per === 'mes' ? '4px' : '50%') + '"></span>' +
     '<button class="' + (per === 'mes' ? 'on' : '') + '" data-act="bet-period" data-v="mes">' + cap(MONTHS[now.getMonth()]) + '</button><button class="' + (per === 'todo' ? 'on' : '') + '" data-act="bet-period" data-v="todo">Todo</button></div>' +
     '<section class="card hero col in" style="--d:.06s;gap:16px;padding:20px 18px 16px">' +
-    '<div class="between" style="align-items:flex-end"><div class="col" style="gap:4px"><span class="muted" style="font-size:13px">Balance neto</span><span class="num" style="font-size:38px;font-weight:600;letter-spacing:-1.6px;color:' + col + '">' + eur(net, 2, true) + '</span></div>' +
+    '<div class="between" style="align-items:flex-end"><div class="col" style="gap:4px"><span class="muted" style="font-size:13px">Balance neto</span><span class="num" style="font-size:38px;font-weight:600;letter-spacing:-1.6px;color:' + col + '">' + eurBig(net, true) + '</span></div>' +
     '<span class="pill" style="margin-bottom:8px;font-size:12px;padding:6px 10px;color:' + col + ';background:' + (net >= 0 ? rgba(acc(), 0.1) : 'rgba(255,93,115,.12)') + '">ROI ' + fmt(roi, 0, true) + ' %</span></div>' +
     (bets.length ? '<svg viewBox="0 0 322 150" width="100%" height="150" fill="none" role="img" aria-label="Evolución del balance" style="overflow:visible"><defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + col + '" stop-opacity=".35"/><stop offset="1" stop-color="' + col + '" stop-opacity="0"/></linearGradient></defs>' +
       '<path d="M0 ' + zy.toFixed(1) + 'H322" stroke="#3A3A42" stroke-dasharray="4 5"/><text x="322" y="' + (zy - 6).toFixed(1) + '" fill="#6E6E78" font-size="10" font-weight="700" text-anchor="end" font-family="Manrope">0 €</text>' +
-      '<path d="' + area + '" fill="url(#ag)" style="animation:fadeIn 1s ease .9s both"/><polyline points="' + pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') + '" stroke="' + col + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:' + (len * 1.08).toFixed(0) + ' 0;animation:drawIn 1.4s var(--ease) .25s both"/>' +
+      '<path d="' + area + '" fill="url(#ag)" style="animation:fadeIn 1s ease .9s both"/><polyline points="' + pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') + '" stroke="' + col + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:' + (len * 1.08).toFixed(0) + ' 0;animation:drawIn 1.4s var(--ease) .25s both"/>' +
       '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + col + '"/></svg>' : '<p class="muted small" style="margin:0">Sin apuestas en este periodo.</p>') +
     '<div class="grid2"><div class="mini"><span class="l">Depositado</span><span class="v">' + eur(dep) + '</span></div><div class="mini"><span class="l">Cobrado</span><span class="v">' + eur(ret) + '</span></div></div></section>' +
-    (limit ? '<section class="card col in" style="--d:.14s;gap:10px;border-radius:22px"><div class="between"><b style="font-size:15px">Límite de depósito del mes</b><span style="font-size:13px;font-weight:700;color:' + (lp >= 100 ? '#FF5D73' : lp >= 75 ? '#FFB84D' : acc()) + '">' + fmt(mdep, 0) + ' / ' + fmt(limit, 0) + ' €</span></div>' +
-      '<div class="bar" style="height:8px"><i class="growx" style="width:' + lp.toFixed(0) + '%;background:linear-gradient(90deg,' + acc() + ',#FFB84D)"></i></div><span class="small muted">' + (mdep >= limit ? 'Has llegado al tope de este mes.' : 'Te quedan ' + eur(limit - mdep, 0) + ' hasta el día 1. Puedes cambiar el tope en Ajustes.') + '</span></section>' : '') +
-    '<section class="col in" style="--d:.2s;gap:12px"><div class="between"><h2>Retos</h2><button class="chip" data-act="reto-new">' + icon('plus', 14, 2.6) + 'Nuevo</button></div>' + (retos || '<p class="muted small" style="margin:0">Aún no tienes retos.</p>') + '</section>' +
-    '<p class="small" style="color:var(--tx4);line-height:1.5;margin:0 4px">Las apuestas no cuentan como gasto en Inicio. Aquí ves si el hobby te cuesta o te da dinero.</p></div>' + tabbar('mas');
+    '<section class="col in" style="--d:.2s;gap:12px"><div class="between"><h2>Retos</h2></div>' + (retos || '<p class="muted small" style="margin:0">No hay retos guardados.</p>') + '</section>' +
+    '<p class="small" style="color:var(--tx4);line-height:1.5;margin:0 4px">Historial de solo lectura: lo registrado se conserva tal cual, pero ya no se apuntan apuestas nuevas.</p></div>' + tabbar('mas');
 }
 
 /* ---------- Pantalla: Resumen (historias) ---------- */
@@ -1219,20 +1298,21 @@ function curveHTML(y, mo, day) {
   const good = diff <= 0;
   const last = cc[cc.length - 1];
   const pm = MONTHS[pd.getMonth()];
+  const mc = moodColor();
   return '<section class="card col in" aria-label="Ritmo de gasto" style="--d:.18s;gap:12px;border-radius:28px">' +
     '<div class="between" style="align-items:flex-start"><div class="col" style="gap:3px"><h2 style="font-size:16px">Tu ritmo</h2><span class="small muted">A día ' + day + ' llevas ' + eur(cur[day], 0) + ' · en ' + pm + ' llevabas ' + eur(cmp, 0) + '</span></div>' +
     (prev[pdim] ? '<span class="pill" style="font-size:12px;padding:6px 10px;color:' + (good ? acc() : '#FFB84D') + ';background:' + (good ? rgba(acc(), 0.1) : 'rgba(255,184,77,.12)') + '">' + eur(diff, 0, true) + '</span>' : '') + '</div>' +
     '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" fill="none" role="img" aria-label="Gasto acumulado este mes comparado con ' + pm + '" style="overflow:visible">' +
-    '<defs><linearGradient id="rg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + acc() + '" stop-opacity=".3"/><stop offset="1" stop-color="' + acc() + '" stop-opacity="0"/></linearGradient></defs>' +
+    '<defs><linearGradient id="rg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + mc + '" stop-opacity=".3"/><stop offset="1" stop-color="' + mc + '" stop-opacity="0"/></linearGradient></defs>' +
     [0.25, 0.5, 0.75].map((f) => '<path d="M0 ' + (P + (H - 2 * P) * f).toFixed(1) + 'H' + W + '" stroke="#1E1E23"/>').join('') +
-    (prev[pdim] ? '<polyline class="draw" points="' + str(pc) + '" stroke="#5C5C66" stroke-width="2" stroke-dasharray="5 5" stroke-linecap="round" style="--d:.3s;animation-name:fadeIn"/>' : '') +
+    (prev[pdim] ? '<polyline class="draw" points="' + str(pc) + '" stroke="#5C5C66" stroke-width="2.4" stroke-dasharray="5 5" stroke-linecap="round" style="--d:.3s;animation-name:fadeIn"/>' : '') +
     '<path d="' + area + '" fill="url(#rg)" class="fade" style="--d:.9s"/>' +
-    '<polyline class="draw" points="' + str(cc) + '" stroke="' + acc() + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:' + (len(cc) * 1.08).toFixed(0) + ' 0;--d:.45s"/>' +
-    '<path d="M' + last[0].toFixed(1) + ' ' + P + 'V' + (H - P) + '" stroke="' + rgba(acc(), 0.25) + '" stroke-dasharray="2 4"/>' +
-    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + acc() + '"/>' +
-    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + acc() + '" style="transform-box:fill-box;transform-origin:center;animation:dotPulse 2s ease-out 1.4s infinite"/></svg>' +
+    '<polyline class="draw" points="' + str(cc) + '" stroke="' + mc + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:' + (len(cc) * 1.08).toFixed(0) + ' 0;--d:.45s"/>' +
+    '<path d="M' + last[0].toFixed(1) + ' ' + P + 'V' + (H - P) + '" stroke="' + rgba(mc, 0.25) + '" stroke-dasharray="2 4"/>' +
+    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + mc + '"/>' +
+    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + mc + '" style="transform-box:fill-box;transform-origin:center;animation:dotPulse 2s ease-out 1.4s infinite"/></svg>' +
     '<div class="between small" style="color:var(--tx4);margin-top:-6px"><span>1</span><span>15</span><span>' + X + '</span></div>' +
-    '<div class="row small" style="gap:16px;color:var(--tx3)"><span class="row" style="gap:6px"><span style="width:16px;height:3px;border-radius:2px;background:' + acc() + '"></span>' + cap(MONTHS[mo]) + '</span>' + (prev[pdim] ? '<span class="row" style="gap:6px"><span style="width:16px;height:0;border-top:2px dashed #5C5C66"></span>' + cap(pm) + '</span>' : '') + '</div></section>';
+    '<div class="row small" style="gap:16px;color:var(--tx3)"><span class="row" style="gap:6px"><span style="width:16px;height:3px;border-radius:2px;background:' + mc + '"></span>' + cap(MONTHS[mo]) + '</span>' + (prev[pdim] ? '<span class="row" style="gap:6px"><span style="width:16px;height:0;border-top:2px dashed #5C5C66"></span>' + cap(pm) + '</span>' : '') + '</div></section>';
 }
 
 /* ---------- Pantalla: ficha del movimiento ---------- */
@@ -1259,7 +1339,7 @@ function scrMov() {
   return '<div class="page sub">' + subHeader('Movimiento', back) +
     '<section class="card hero col" style="view-transition-name:movcard;align-items:center;text-align:center;gap:12px;padding:26px 18px">' + avatar(m, 76, 24) +
     '<span style="font-size:20px;font-weight:800;line-height:1.2">' + esc(m.concepto || m.categoria) + '</span>' +
-    '<span class="num" style="font-size:40px;font-weight:600;letter-spacing:-1.6px;color:' + (amt > 0 ? acc() : 'var(--tx)') + '">' + eur(amt, 2, true) + '</span>' +
+    '<span class="num" style="font-size:40px;font-weight:600;letter-spacing:-1.6px;color:' + (amt > 0 ? acc() : 'var(--tx)') + '">' + eurBig(amt, true) + '</span>' +
     '<div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center"><a href="#cat/' + encodeURIComponent(m.categoria) + '" class="chip" style="color:var(--tx)"><span class="dot" style="background:' + look.color + '"></span>' + esc(m.tipo === 'apuesta' ? (m.reto || 'Apuesta') : m.categoria) + '</a><span class="chip">' + cap(WD[d.getDay()]) + ' ' + d.getDate() + ' ' + MONTHS_S[d.getMonth()] + ' · ' + hhmm(m.fecha) + '</span></div></section>' +
     (m.nota ? '<div class="card in" style="--d:.05s;border-radius:22px"><span class="small muted">Nota</span><p style="margin:4px 0 0;font-size:15px">' + esc(m.nota) + '</p></div>' : '') +
     (ticket ? '<section class="col in" style="--d:.08s;gap:10px"><h2 style="font-size:16px">Ticket</h2>' + ticket + '</section>' : '') +
@@ -1303,7 +1383,7 @@ function scrCat() {
     '<section class="card hero row in" style="--d:.04s;gap:18px;padding:20px">' +
     '<div style="position:relative;width:96px;height:96px;flex-shrink:0">' + ring(96, 8, pct === null ? 100 : pct, col, 0.35) +
     '<div style="position:absolute;inset:14px;border-radius:50%;background:' + rgba(c.color, 0.14) + ';color:' + c.color + ';display:flex;align-items:center;justify-content:center">' + icon(c.icono, 30) + '</div></div>' +
-    '<div class="col grow" style="gap:4px"><span class="muted" style="font-size:13px">' + cap(MONTHS[mo]) + '</span><span class="num" data-count="' + spent.toFixed(2) + '" data-suffix=" €" style="font-size:30px;font-weight:600;letter-spacing:-1.2px">' + eur(spent) + '</span>' +
+    '<div class="col grow" style="gap:4px"><span class="muted" style="font-size:13px">' + cap(MONTHS[mo]) + '</span><span class="num" data-count="' + spent.toFixed(2) + '" data-big style="font-size:30px;font-weight:600;letter-spacing:-1.2px">' + eurBig(spent) + '</span>' +
     '<span class="small" style="color:' + col + ';font-weight:700">' + (c.presupuesto ? Math.round(pct) + ' % de ' + eur(c.presupuesto, 0) : 'Sin presupuesto') + '</span>' +
     '<button class="chip" data-act="cat-budget" style="align-self:flex-start;margin-top:4px">' + icon('pencil', 13, 2.4) + (c.presupuesto ? 'Cambiar presupuesto' : 'Poner presupuesto') + '</button></div></section>' +
     '<section class="card col in" style="--d:.1s;gap:12px;border-radius:26px"><div class="between"><h2 style="font-size:16px">Últimos 6 meses</h2><span class="small muted">Media ' + eur(avgMonth || 0, 0) + '/mes</span></div>' +
@@ -1418,9 +1498,8 @@ function scrAjustes() {
     '<label class="field"><span>Tope apuestas / mes</span><input class="input" inputmode="decimal" data-inp="form.limite" value="' + esc(F.limite) + '"></label></div>' +
     '<label class="field"><span>Tu nombre</span><input class="input" data-inp="form.nombre" value="' + esc(F.nombre) + '"></label>' +
     '<button class="btn ghost" data-act="nums-save">' + icon('check', 18) + 'Guardar</button><span class="small muted">Los presupuestos de cada categoría se cambian en la hoja «Categorias» de tu Sheet.</span></section>' +
-    '<section class="card col in" style="--d:.15s;gap:14px;border-radius:26px"><h2>Apariencia</h2><div class="row" style="gap:12px">' +
-    ACCENTS.map((c) => '<button data-act="accent" data-v="' + c + '" aria-label="Color ' + c + '" aria-pressed="' + (c === acc()) + '" style="width:48px;height:48px;border-radius:50%;background:' + c + ';border:3px solid ' + (c === acc() ? '#F4F4F5' : 'transparent') + ';box-shadow:' + (c === acc() ? '0 0 0 4px ' + rgba(c, 0.25) : 'none') + '"></button>').join('') + '</div>' +
-    '<button class="toggle" data-act="mood" aria-pressed="' + (S.prefs.mood !== false) + '"><span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:700">Color según cómo vas</span><span class="small muted">Lima si vas bien, ámbar si te acercas al presupuesto, rojo si te pasas</span></span><span class="switch' + (S.prefs.mood !== false ? ' on' : '') + '"></span></button>' +
+    '<section class="card col in" style="--d:.15s;gap:14px;border-radius:26px"><h2>Apariencia</h2>' +
+    '<button class="toggle" data-act="mood" aria-pressed="' + (S.prefs.mood !== false) + '"><span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:700">Color según cómo vas</span><span class="small muted">La tarjeta «Puedes gastar hoy», tu ritmo y el halo del +: lima si vas bien, ámbar si te acercas al presupuesto, rojo si te pasas</span></span><span class="switch' + (S.prefs.mood !== false ? ' on' : '') + '"></span></button>' +
     '<button class="toggle" data-act="calm" aria-pressed="' + S.prefs.calm + '"><span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:700">Reducir animaciones</span><span class="small muted">Para ir más rápido o ahorrar batería</span></span><span class="switch' + (S.prefs.calm ? ' on' : '') + '"></span></button></section>' +
     '<section class="card col in" style="--d:.2s;gap:12px;border-radius:26px"><h2>Datos</h2>' +
     '<button class="btn ghost" data-act="export">' + icon('download', 18) + 'Exportar a CSV (Excel)</button>' +
@@ -1498,20 +1577,24 @@ function sheetHTML() {
       '<button class="btn" data-act="logo-save">Guardar</button>';
   } else if (sh.type === 'ticket') {
     body = '<h2>Ticket</h2><img src="' + sh.src + '" alt="Foto del ticket" style="width:100%;border-radius:18px">';
+  } else if (sh.type === 'detalles') {
+    body = detallesSheetHTML();
   }
   const still = S.ui.sheetShown === sh ? ' still' : '';
   S.ui.sheetShown = sh;
-  return '<div class="scrim' + still + '" data-act="sheet-close"></div><div class="sheet' + still + '" role="dialog" aria-modal="true"><span class="grab"></span>' + body + '<button class="btn ghost" data-act="sheet-close">Cerrar</button></div>';
+  return '<div class="scrim' + still + '" data-act="sheet-close"></div><div class="sheet' + still + '" role="dialog" aria-modal="true" aria-label="' + (sh.type === 'detalles' ? 'Detalles' : '') + '"><span class="grab"></span>' + body + (sh.type === 'detalles' ? '' : '<button class="btn ghost" data-act="sheet-close">Cerrar</button>') + '</div>';
 }
 function openSheet(type, id, form) { S.ui.sheet = { type, id }; S.ui.form = form || {}; render(); }
 function closeSheet() { S.ui.sheet = null; S.ui.form = {}; render(); }
 
 /* ---------- Avisos y efectos ---------- */
 
-function toast(text, undo) {
+function toast(text, undo, tone) {
   $$('.toast').forEach((t) => t.remove());
   const el = document.createElement('div');
   el.className = 'toast';
+  if (tone === 'red') el.style.background = '#FF5D73';
+  else if (tone === 'amber') el.style.background = '#FFB84D';
   el.setAttribute('role', 'status');
   el.innerHTML = '<b>' + esc(text) + '</b>' + (undo ? '<button>Deshacer</button>' : '');
   document.body.appendChild(el);
@@ -1541,14 +1624,31 @@ function animateCounts() {
     const target = parseFloat(el.dataset.count) || 0;
     const dec = el.dataset.dec !== undefined ? +el.dataset.dec : 2;
     const suf = el.dataset.suffix || '';
+    const big = el.dataset.big !== undefined;
     const start = performance.now() + 250, dur = 1300;
     const tick = (now) => {
       const p = clamp((now - start) / dur, 0, 1);
-      el.textContent = fmt(target * (1 - Math.pow(1 - p, 3)), dec) + suf;
+      const v = target * (1 - Math.pow(1 - p, 3));
+      if (big) el.innerHTML = eurBig(v); else el.textContent = fmt(v, dec) + suf;
       if (p < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   });
+}
+// Tras guardar: el «Puedes gastar hoy» cuenta desde el valor de antes hasta el nuevo.
+function countFromTo(from) {
+  const el = $('[data-count-key="today"]');
+  if (!el) return;
+  const to = parseFloat(el.dataset.count) || 0;
+  if (S.prefs.calm || matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to - from) < 0.005) return;
+  el.innerHTML = eurBig(from);
+  const start = performance.now() + 120, dur = 900;
+  const tick = (now) => {
+    const p = clamp((now - start) / dur, 0, 1);
+    el.innerHTML = eurBig(from + (to - from) * (1 - Math.pow(1 - p, 3)));
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 function exportCSV() {
   const rows = [['Fecha', 'Hora', 'Tipo', 'Categoría', 'Concepto', 'Importe', 'Nota', 'Origen', 'Reto', 'Ticket']];
@@ -1597,7 +1697,7 @@ const ACT = {
   'mov-edit': (d) => {
     const m = S.data.movs.find((x) => x.id === d.id);
     if (!m) return;
-    S.ui.add = { id: m.id, tipo: m.tipo, amount: fmt(m.importe).replace(/\./g, ''), cat: m.tipo === 'apuesta' ? (m.reto || 'Suelta') : m.categoria, concepto: m.concepto || '', nota: m.nota || '', fecha: String(m.fecha).slice(0, 16), flag: m.tipo === 'apuesta' ? !!m.cobro : false, ticket: null, ticketUrl: m.ticket || '', origen: m.origen || 'manual' };
+    S.ui.add = { id: m.id, tipo: m.tipo, amount: fmt(m.importe).replace(/\./g, ''), cat: m.tipo === 'apuesta' ? (m.reto || 'Suelta') : m.categoria, concepto: m.concepto || '', nota: m.nota || '', fecha: String(m.fecha).slice(0, 16), flag: m.tipo === 'apuesta' ? !!m.cobro : false, ticket: null, ticketUrl: m.ticket || '', origen: m.origen || 'manual', catManual: true, ruleHint: '' };
     location.hash = '#add';
   },
   'mov-del': (d) => {
@@ -1616,9 +1716,29 @@ const ACT = {
     else if (m.ticket && m.ticket !== 'local') window.open(m.ticket, '_blank');
   },
   'add-type': (d) => { const keep = S.ui.add; S.ui.add = Object.assign(newAdd(d.v), { id: keep.id, amount: keep.amount, fecha: keep.fecha, nota: keep.nota, concepto: keep.concepto, ticket: keep.ticket, ticketUrl: keep.ticketUrl }); render(); },
-  'add-cat': (d) => { S.ui.add.cat = d.v; render(); },
+  'add-cat': (d) => { S.ui.add.cat = d.v; S.ui.add.catManual = true; S.ui.add.ruleHint = ''; render(); },
+  'add-det': () => openSheet('detalles', null, {}),
+  'add-rec': (d) => {
+    const A = S.ui.add; const r = recientes(A.tipo)[Number(d.i)];
+    if (!r) return;
+    A.concepto = r.concepto; A.cat = r.cat; A.catManual = true; A.ruleHint = '';
+    if (r.importe && (A.amount === '0' || A.amount === '')) A.amount = fmt(r.importe).replace(/\./g, '');
+    haptic(); render();
+  },
+  'add-concepto': (d, el) => {
+    const A = S.ui.add;
+    if (!A || A.tipo === 'apuesta' || A.catManual) return;
+    const r = ruleFor(A.concepto);
+    if (!r || r.cat === A.cat || !catsOf(A.tipo).some((c) => c.nombre === r.cat)) return;
+    A.cat = r.cat;
+    A.ruleHint = 'Categoría cambiada a ' + r.cat + ' por tu regla «' + r.pat + '»';
+    const h = $('#rulehint'); if (h) { h.textContent = A.ruleHint; h.style.display = ''; }
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    updateAddCats();
+  },
   'add-flag': () => { S.ui.add.flag = !S.ui.add.flag; render(); },
   key: (d) => {
+    haptic();
     const A = S.ui.add;
     let a = A.amount === '0' ? '' : A.amount;
     const k = d.v;
@@ -1633,10 +1753,12 @@ const ACT = {
     A.amount = a || '0';
     const el = $('#amt');
     if (el) { el.textContent = A.amount; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+    $$('.recs em').forEach((x) => x.remove());
   },
   'ticket-pick': () => { $('#ticketInput').value = ''; $('#ticketInput').click(); },
   'ticket-clear': () => { S.ui.add.ticket = null; S.ui.add.ticketUrl = ''; render(); },
   'add-save': (d, el) => {
+    haptic();
     const a = S.ui.add;
     const imp = parseAmount(a.amount);
     if (!imp) { const e = $('#amt'); if (e) { e.style.color = '#FF5D73'; e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); setTimeout(() => { e.style.color = ''; }, 600); } return; }
@@ -1646,6 +1768,7 @@ const ACT = {
       categoria: isBet ? 'Apuestas' : a.cat, concepto: a.concepto.trim() || (isBet ? (a.cat === 'Suelta' ? 'Apuesta' : a.cat) : a.cat),
       nota: a.nota.trim(), origen: a.id ? a.origen : 'manual', ticket: a.ticketUrl || '', reto: isBet && a.cat !== 'Suelta' ? a.cat : '', cobro: isBet ? !!a.flag : false
     };
+    const before = todayInfo().today;
     const op = { action: a.id ? 'update_mov' : 'add_mov', mov };
     if (a.ticket) { op.ticket = { data: a.ticket.data, mime: a.ticket.mime }; S.previews[mov.id] = a.ticket.preview; mov.ticket = 'local'; }
     enqueue(op);
@@ -1653,10 +1776,15 @@ const ACT = {
       const dd = parseD(mov.fecha) || new Date();
       enqueue({ action: 'upsert', sheet: 'Fijos', obj: { id: uid(), nombre: mov.concepto, importe: imp, frecuencia_meses: 1, proximo: isoDay(addMonths(dd, 1)), categoria: mov.categoria, tipo: a.tipo } });
     }
-    if (a.id) { S.ui.add = null; location.hash = '#movs'; toast('Cambios guardados'); return; }
+    const after = todayInfo().today;
+    const mood = computeMood();
+    const tone = after <= 0 ? 'red' : (mood === 'warn' && S.prefs.mood !== false ? 'amber' : null);
+    const left = 'hoy te quedan ' + eur(after);
+    if (a.id) { S.ui.add = null; location.hash = '#movs'; toast('Cambios guardados · ' + left, null, tone); return; }
     confetti(el);
-    toast((a.tipo === 'gasto' ? '−' : (isBet && !a.flag) ? '−' : '+') + fmt(imp) + ' € · ' + (isBet ? a.cat : a.cat) + (S.cfg.demo ? '' : ' · enviando a tu Sheet'));
+    toast((a.tipo === 'ingreso' ? '+' : '−') + fmt(imp) + ' € · ' + left, null, tone);
     const back = S.prevRoute && S.prevRoute !== 'add' ? S.prevRoute : 'inicio';
+    if (back === 'inicio' && Math.abs(after - before) >= 0.005) S.countFrom = before;
     setTimeout(() => { if (S.route === 'add') { S.ui.add = null; location.hash = '#' + back; } }, 900);
   },
   'meta-open': (d) => { const m = S.data.metas.find((x) => x.id === d.id); if (m) openSheet('meta', m.id, { nombre: m.nombre, objetivo: m.objetivo, ahorrado: m.ahorrado, fecha_objetivo: m.fecha_objetivo || '', principal: m.principal, aporte: '' }); },
@@ -1774,7 +1902,6 @@ const ACT = {
     [['nomina', parseAmount(F.nomina)], ['limite_apuestas', parseAmount(F.limite)], ['nombre', String(F.nombre || '').trim()]].forEach(([k, v]) => enqueue({ action: 'upsert', sheet: 'Config', key: 'clave', obj: { clave: k, valor: v } }));
     toast('Guardado');
   },
-  accent: (d) => { S.prefs.accent = d.v; store(LS.prefs, S.prefs); applyPrefs(); render(); },
   calm: () => { S.prefs.calm = !S.prefs.calm; store(LS.prefs, S.prefs); applyPrefs(); render(); },
   export: () => exportCSV(),
   reset: () => {
@@ -1796,12 +1923,13 @@ function render(opts = {}) {
   S.lastRendered = key;
   if (S.route === 'add' && !S.ui.add) S.ui.add = newAdd();
   S.mood = computeMood();
-  document.documentElement.style.setProperty('--acc', acc());
+  setMoodVars();
   const y = window.scrollY;
   const showSkel = S.syncing && !S.cfg.demo && !S.data.cats.length && ['inicio', 'movs', 'objetivos', 'mas'].includes(S.route);
   const html = showSkel ? skeletonHTML() : (SCREENS[S.route] || scrInicio)();
   app.innerHTML = '<div class="' + (fresh && !opts.vt ? '' : 'noanim') + '">' + html + '</div>' + sheetHTML();
-  if (fresh) { window.scrollTo(0, 0); if (!opts.vt) animateCounts(); } else window.scrollTo(0, y);
+  if (fresh) { window.scrollTo(0, 0); if (!opts.vt && !S.countFrom) animateCounts(); } else window.scrollTo(0, y);
+  if (S.countFrom && S.route === 'inicio') { countFromTo(S.countFrom); S.countFrom = null; }
 }
 const TABS = ['inicio', 'movs', 'add', 'objetivos', 'mas'];
 function transitionDir(from, to) {
@@ -1837,8 +1965,14 @@ function onRoute() {
   }
   if (S.route === 'resumen') armStory();
 }
+function setMoodVars() {
+  const st = document.documentElement.style, m = moodColor();
+  st.setProperty('--acc', ACC);
+  st.setProperty('--mood', m);
+  st.setProperty('--moodglow', rgba(m, 0.38));
+}
 function applyPrefs() {
-  document.documentElement.style.setProperty('--acc', acc());
+  setMoodVars();
   document.body.classList.toggle('calm', !!S.prefs.calm);
 }
 
@@ -1849,6 +1983,18 @@ document.addEventListener('click', (e) => {
   if (!fn) return;
   e.preventDefault();
   fn(el.dataset, el, e);
+});
+// Tecla pulsada: se encoge y se ilumina al menos 80 ms, aunque el toque sea muy rápido
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest && e.target.closest('.keys button');
+  if (!b) return;
+  b.classList.add('hit');
+  const t0 = performance.now();
+  const up = () => {
+    window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+    setTimeout(() => b.classList.remove('hit'), Math.max(0, 80 - (performance.now() - t0)));
+  };
+  window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
 });
 document.addEventListener('input', (e) => {
   const el = e.target;

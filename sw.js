@@ -1,8 +1,8 @@
 // Service worker de Gastos.
 // Archivos de la app: primero la red (así cada actualización llega al momento)
-// y, si no hay conexión, la copia guardada. Fuentes: copia guardada primero.
-const VERSION = 'gastos-v5';
-const SHELL = ['./', 'index.html', 'app.js', 'icons.js', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+// y, si no hay conexión, la copia guardada. Las fuentes van en local, dentro de la app.
+const VERSION = 'gastos-v6';
+const SHELL = ['./', 'index.html', 'app.js', 'icons.js', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'unbounded.woff2', 'manrope.woff2'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
