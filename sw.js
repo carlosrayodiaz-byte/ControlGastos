@@ -1,10 +1,15 @@
-// Service worker de Gastos: guarda la app para que abra sin conexión.
-// Si cambias algún archivo de la app, sube el número de versión.
-const VERSION = 'gastos-v3';
+// Service worker de Gastos.
+// Archivos de la app: primero la red (así cada actualización llega al momento)
+// y, si no hay conexión, la copia guardada. Fuentes: copia guardada primero.
+const VERSION = 'gastos-v4';
 const SHELL = ['./', 'index.html', 'app.js', 'icons.js', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(VERSION)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -19,9 +24,24 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  // Los datos (Apps Script) siempre van a la red.
+  // Los datos (Apps Script) siempre van directos a la red.
   if (url.hostname.endsWith('google.com') || url.hostname.endsWith('googleusercontent.com')) return;
-  // App y fuentes: responde rápido desde caché y actualiza por detrás.
+
+  if (url.origin === self.location.origin) {
+    e.respondWith(
+      fetch(req, { cache: 'no-cache' })
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html')))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.open(VERSION).then((cache) =>
       cache.match(req).then((hit) => {
