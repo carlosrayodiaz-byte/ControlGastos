@@ -16,10 +16,10 @@ const S = {
   cfg: { url: '', token: '', demo: false },
   data: emptyData(),
   queue: [],
-  prefs: { accent: ACCENTS[0], calm: false, sim: { precio: '200.000', entrada: '20', gastos: '12', anos: '30', tin: '3' } },
+  prefs: { accent: ACCENTS[0], calm: false, mood: true, logos: {}, sim: { precio: '200.000', entrada: '20', gastos: '12', anos: '30', tin: '3' } },
   route: 'inicio', prevRoute: 'inicio', lastRendered: null,
   syncing: false, syncErr: null,
-  previews: {},
+  previews: {}, tickets: {}, mood: 'ok', routeParam: '',
   ui: freshUI()
 };
 
@@ -84,7 +84,11 @@ function icon(name, size = 20, sw = 2) {
 function parseAmount(s) { const n = parseFloat(String(s || '').replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : Math.round(n * 100) / 100; }
 function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* almacenamiento lleno o bloqueado */ } }
 function load(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }
-function acc() { return S.prefs.accent || ACCENTS[0]; }
+function acc() {
+  const base = S.prefs.accent || ACCENTS[0];
+  if (S.prefs.mood === false) return base;
+  return S.mood === 'bad' ? '#FF5D73' : S.mood === 'warn' ? '#FFB84D' : base;
+}
 
 /* ---------- Datos ---------- */
 
@@ -204,7 +208,8 @@ async function flush() {
 }
 async function sync() {
   if (S.cfg.demo || !S.cfg.url || S.syncing) return;
-  S.syncing = true; updateSyncChip();
+  S.syncing = true;
+  if (!S.data.cats.length) render(); else updateSyncChip();
   try {
     await flush();
     const j = await apiGet({ action: 'all' });
@@ -302,19 +307,19 @@ function movRow(m, i, withActs) {
   if (m.ticket) tags.push('<span class="tag" style="color:#C8C8D0;background:rgba(255,255,255,.07)">' + icon('receipt', 10, 2.6) + 'Ticket</span>');
   const sub = m.tipo === 'apuesta' ? (m.reto || 'Apuesta suelta') + ' · ' + (m.cobro ? 'cobro' : 'depósito') : m.categoria;
   const title = m.concepto || m.categoria || (m.tipo === 'apuesta' ? 'Apuesta' : 'Movimiento');
-  const front = '<span class="ico" style="background:' + rgba(look.color, 0.14) + ';color:' + look.color + '">' + icon(look.icono, 20) + '</span>' +
+  const front = avatar(m, 44, 15) +
     '<span class="col grow" style="gap:3px"><span style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(title) + '</span>' +
     '<span class="row" style="gap:6px;flex-wrap:wrap"><span class="small muted">' + esc(sub) + (time ? ' · ' + time : '') + '</span>' + tags.join('') + '</span>' +
     (m.nota ? '<span class="small" style="color:var(--tx4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(m.nota) + '</span>' : '') + '</span>' +
     '<span class="num" style="font-size:14px;font-weight:600;color:' + color + ';white-space:nowrap">' + eur(amt, 2, true) + '</span>';
   const delay = '--d:' + Math.min(0.15 + i * 0.045, 0.9).toFixed(2) + 's';
-  if (!withActs) return '<div class="row in" style="padding:12px;border-radius:20px;background:var(--s1);border:1px solid rgba(255,255,255,.05);' + delay + '">' + front + '</div>';
+  if (!withActs) return '<button class="row in movlite" data-act="mov-open" data-id="' + esc(m.id) + '" style="width:100%;text-align:left;padding:12px;border-radius:20px;background:var(--s1);border:1px solid rgba(255,255,255,.05);' + delay + '">' + front + '</button>';
   const acts = [];
   if (m.ticket) acts.push('<button data-act="mov-ticket" data-id="' + esc(m.id) + '" style="background:#5AC8FF">' + icon('receipt', 18) + 'Ticket</button>');
   acts.push('<button data-act="mov-edit" data-id="' + esc(m.id) + '" style="background:#8B7CFF">' + icon('pencil', 18) + 'Editar</button>');
   acts.push('<button data-act="mov-del" data-id="' + esc(m.id) + '" style="background:#FF5D73">' + icon('trash-2', 18) + 'Borrar</button>');
   return '<div class="mov in" style="' + delay + ';--open:-' + (acts.length * 72) + 'px"><div class="acts">' + acts.join('') + '</div>' +
-    '<button class="front" data-act="mov-toggle" aria-label="Opciones de ' + esc(title) + '">' + front + '</button></div>';
+    '<button class="front" data-act="mov-open" data-id="' + esc(m.id) + '" aria-label="' + esc(title) + '">' + front + '</button></div>';
 }
 
 /* ---------- Pantalla: Inicio ---------- */
@@ -373,11 +378,11 @@ function scrInicio() {
     const p = Math.round(s / c.presupuesto * 100);
     const col = p >= 100 ? '#FF5D73' : (p >= 70 ? '#FFB84D' : acc());
     const bg = p >= 100 ? 'rgba(255,93,115,.12)' : (p >= 70 ? 'rgba(255,184,77,.12)' : rgba(acc(), 0.1));
-    return '<div class="in" style="--d:' + (0.32 + i * 0.06).toFixed(2) + 's;width:134px;flex-shrink:0;padding:14px;border-radius:24px;background:var(--s1);border:1px solid var(--line);display:flex;flex-direction:column;gap:12px">' +
+    return '<a href="#cat/' + encodeURIComponent(c.nombre) + '" class="in press" style="--d:' + (0.32 + i * 0.06).toFixed(2) + 's;width:134px;flex-shrink:0;padding:14px;border-radius:24px;background:var(--s1);border:1px solid var(--line);display:flex;flex-direction:column;gap:12px;color:var(--tx)">' +
       '<div style="position:relative;width:58px;height:58px">' + ring(58, 5, p, col, 0.6 + i * 0.08) +
       '<div style="position:absolute;inset:9px;border-radius:50%;background:' + rgba(c.color, 0.14) + ';color:' + c.color + ';display:flex;align-items:center;justify-content:center">' + icon(c.icono, 20) + '</div></div>' +
       '<div class="col" style="gap:3px"><span style="font-size:14px;font-weight:700">' + esc(c.nombre) + '</span><span class="small muted num" style="font-family:inherit">' + fmt(s) + ' / ' + fmt(c.presupuesto, 0) + ' €</span></div>' +
-      '<span class="pill" style="align-self:flex-start;background:' + bg + ';color:' + col + '">' + (p >= 100 ? 'Al límite' : p + ' %') + '</span></div>';
+      '<span class="pill" style="align-self:flex-start;background:' + bg + ';color:' + col + '">' + (p >= 100 ? 'Al límite' : p + ' %') + '</span></a>';
   }).join('');
 
   const latest = S.data.movs.slice(0, 5);
@@ -390,7 +395,7 @@ function scrInicio() {
     '<section class="in" aria-label="Puedes gastar hoy" style="--d:.08s;position:relative;overflow:hidden;border-radius:30px;padding:22px 20px;background:' + acc() + ';color:#0B0B0D;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 18px 40px ' + rgba(acc(), 0.22) + '">' +
     '<div aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:35%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.45),rgba(255,255,255,0));animation:shimmer 4s ease-in-out 1.6s infinite"></div>' +
     '<div class="col" style="position:relative;gap:4px"><span style="font-size:13px;font-weight:800">Puedes gastar hoy</span><span class="num" data-count="' + today.toFixed(2) + '" data-suffix=" €" style="font-size:42px;font-weight:700;letter-spacing:-1.8px">' + eur(today) + '</span>' +
-    '<span style="font-size:12px;font-weight:600;opacity:.72">' + eur(Math.max(0, remaining), 0) + ' para los ' + daysLeft + ' días que quedan.' + (pendNames.length ? ' Ya descuenta ' + esc(pendNames.join(', ')) + '.' : '') + '</span></div>' +
+    '<span style="font-size:12px;font-weight:600;opacity:.72">' + (S.mood === 'bad' && S.prefs.mood !== false ? 'Te has pasado del presupuesto del mes. ' : S.mood === 'warn' && S.prefs.mood !== false ? 'Vas por encima de tu ritmo. ' : '') + eur(Math.max(0, remaining), 0) + ' para los ' + daysLeft + ' días que quedan.' + (pendNames.length ? ' Ya descuenta ' + esc(pendNames.join(', ')) + '.' : '') + '</span></div>' +
     '<div aria-hidden="true" style="position:relative;width:64px;height:64px;flex-shrink:0;animation:floaty 3.2s ease-in-out infinite">' + ring(64, 6, daysLeft / dim * 100, '#0B0B0D', 0.6, 'rgba(11,11,13,.14)') +
     '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1"><span class="num" style="font-size:16px;font-weight:700">' + daysLeft + '</span><span style="font-size:9px;font-weight:800">días</span></div></div></section>' +
 
@@ -410,6 +415,7 @@ function scrInicio() {
     '<div class="mini in" style="--d:.78s"><span class="l">Movimientos</span><span class="v" style="font-size:14px">' + md.movs.length + '</span></div>' +
     '<div class="mini in" style="--d:.82s"><span class="l">Gasto mayor</span><span class="v" style="font-size:14px">' + fmt(Math.max(0, ...md.gastos.map((g) => g.importe)), 0) + ' €</span></div></div></section>' +
 
+    curveHTML(y, mo, day) +
     betCard +
     (tiles ? '<section class="col in" style="--d:.26s;gap:12px"><div class="between"><h2>Presupuestos</h2><span class="muted" style="font-size:13px">' + fmt(spentBudg) + ' / ' + fmt(budgetTotal, 0) + ' €</span></div><div class="hscroll">' + tiles + '</div></section>' : '') +
 
@@ -469,7 +475,7 @@ function movListHTML() {
     }
     out += movRow(x, i, true).replace('class="mov in"', 'class="mov in" data-id="' + esc(x.id) + '"');
   });
-  out += '<p class="small fade" style="color:var(--tx4);text-align:center;margin:10px 0 0">Toca un movimiento para ver el ticket, editarlo o borrarlo</p>';
+  out += '<p class="small fade" style="color:var(--tx4);text-align:center;margin:10px 0 0">Toca un movimiento para ver su ficha. Desliza a la izquierda para editar o borrar.</p>';
   return out;
 }
 
@@ -1043,14 +1049,14 @@ function scrMensual() {
     const media = opts.pct ? sum(arr.slice(0, T.n)) / T.nData : t / T.nData;
     return '<td class="tot">' + (opts.pct ? '' : fmt(t, 0, opts.sign)) + '</td><td class="tot">' + (opts.pct ? fmt(media, 0) + ' %' : fmt(media, 0, opts.sign)) + '</td>';
   };
-  const row = (label, arr, opts = {}) => '<tr class="' + (opts.cls || '') + '"><th>' + (opts.dot ? '<span class="dot" style="background:' + opts.dot + ';width:7px;height:7px"></span>' : '') + esc(label) + '</th>' +
+  const row = (label, arr, opts = {}) => '<tr class="' + (opts.cls || '') + '"><th>' + (opts.dot ? '<span class="dot" style="background:' + opts.dot + ';width:7px;height:7px"></span>' : '') + (opts.link ? '<a href="#cat/' + encodeURIComponent(label) + '" style="color:inherit">' + esc(label) + '</a>' : esc(label)) + '</th>' +
     arr.map((v, m) => cell(v, m, Object.assign({}, opts, { bg: opts.heat ? opts.heat(v) : null, color: opts.colorFn ? opts.colorFn(v) : null }))).join('') + totals(arr, opts) + '</tr>';
   const sec = (label) => '<tr class="sec"><th>' + label + '</th>' + '<td></td>'.repeat(14) + '</tr>';
   const heatFor = (arr, color) => { const mx = Math.max(1, ...arr); return (v) => (v ? rgba(color, 0.06 + 0.32 * v / mx) : null); };
   const head = '<tr class="hd"><th>' + y + '</th>' + MONTHS_S.map((m, i) => '<td>' + (i <= T.lastM ? '<button data-act="tabla-mes" data-m="' + i + '">' + cap(m) + '</button>' : cap(m)) + '</td>').join('') + '<td class="tot">Total</td><td class="tot">Media</td></tr>';
   let body = sec('Ingresos') + (T.ingOrder.length ? T.ingOrder.map((k) => row(k, T.ing[k], { dot: cat(k).color })).join('') : '<tr><th class="muted">Sin ingresos</th>' + '<td></td>'.repeat(14) + '</tr>') +
     row('Total ingresos', T.totIng, { cls: 'strong', color: null, colorFn: () => acc() }) +
-    sec('Gastos') + T.gasOrder.map((k) => row(k, T.gas[k], { dot: cat(k).color, heat: heatFor(T.gas[k], cat(k).color) })).join('') +
+    sec('Gastos') + T.gasOrder.map((k) => row(k, T.gas[k], { dot: cat(k).color, link: true, heat: heatFor(T.gas[k], cat(k).color) })).join('') +
     row('Total gastos', T.totGas, { cls: 'strong' }) +
     sec('Resultado') +
     row('Ahorro', T.ahorro, { cls: 'strong', sign: true, colorFn: (v) => (v >= 0 ? acc() : '#FF5D73') }) +
@@ -1133,6 +1139,265 @@ function scrSimulador() {
     '<p class="small" style="color:var(--tx4);margin:0 4px">Tu ritmo de ahorro sale de tus ingresos fijos (nómina y pagas extra prorrateadas) menos lo que has gastado de media en los últimos meses. Es una simulación orientativa, no una oferta de hipoteca.</p></div>' + tabbar('objetivos');
 }
 
+
+/* ---------- Logos de comercios ---------- */
+
+const LOGOS = [
+  ['repsol', 'repsol.es'], ['galp', 'galp.com'], ['cepsa', 'cepsa.es'], ['moeve', 'moeveglobal.com'], ['shell', 'shell.es'], ['plenoil', 'plenoil.es'], ['ballenoil', 'ballenoil.es'], ['petronor', 'petronor.eus'], ['bp', 'bp.com'], ['esclatoil', 'bonpreuesclat.cat'],
+  ['mercadona', 'mercadona.es'], ['lidl', 'lidl.es'], ['aldi', 'aldi.es'], ['bonpreu', 'bonpreuesclat.cat'], ['esclat', 'bonpreuesclat.cat'], ['bonarea', 'bonarea.com'], ['caprabo', 'caprabo.com'], ['carrefour', 'carrefour.es'], ['condis', 'condis.es'], ['consum', 'consum.es'], ['eroski', 'eroski.es'], ['alcampo', 'alcampo.es'], ['hipercor', 'hipercor.es'], ['ametller', 'ametllerorigen.com'], ['spar', 'spar.es'],
+  ['mcdonald', 'mcdonalds.es'], ['mcdonalds', 'mcdonalds.es'], ['burger king', 'burgerking.es'], ['kfc', 'kfc.es'], ['telepizza', 'telepizza.es'], ['domino', 'dominospizza.es'], ['dominos', 'dominospizza.es'], ['starbucks', 'starbucks.es'], ['100 montaditos', '100montaditos.com'], ['goiko', 'goiko.com'], ['vips', 'vips.es'], ['foster', 'fostershollywood.es'], ['tgb', 'tgb.es'], ['glovo', 'glovoapp.com'], ['just eat', 'just-eat.es'], ['uber eats', 'ubereats.com'], ['granier', 'granier.com'], ['5 a sec', '5asec.es'], ['viena', 'viena.es'], ['pans', 'pansandcompany.com'], ['dunkin', 'dunkin.es'], ['taco bell', 'tacobell.es'], ['popeyes', 'popeyes.es'], ['ginos', 'ginos.es'], ['udon', 'udon.es'],
+  ['spotify', 'spotify.com'], ['netflix', 'netflix.com'], ['claude', 'claude.ai'], ['anthropic', 'claude.ai'], ['chatgpt', 'openai.com'], ['openai', 'openai.com'], ['hbo', 'max.com'], ['disney', 'disneyplus.com'], ['prime video', 'primevideo.com'], ['youtube', 'youtube.com'], ['icloud', 'icloud.com'], ['apple.com', 'apple.com'], ['apple', 'apple.com'], ['dazn', 'dazn.com'], ['movistar', 'movistar.es'], ['filmin', 'filmin.es'], ['audible', 'audible.es'], ['duolingo', 'duolingo.com'], ['google', 'google.com'],
+  ['steam', 'steampowered.com'], ['playstation', 'playstation.com'], ['nintendo', 'nintendo.es'], ['xbox', 'xbox.com'], ['epic games', 'epicgames.com'], ['cinesa', 'cinesa.es'], ['ocine', 'ocine.es'], ['yelmo', 'yelmocines.es'], ['kinepolis', 'kinepolis.es'], ['ticketmaster', 'ticketmaster.es'], ['game', 'game.es'],
+  ['amazon', 'amazon.es'], ['amzn', 'amazon.es'], ['aliexpress', 'aliexpress.com'], ['decathlon', 'decathlon.es'], ['ikea', 'ikea.com'], ['fnac', 'fnac.es'], ['media markt', 'mediamarkt.es'], ['mediamarkt', 'mediamarkt.es'], ['pccomponentes', 'pccomponentes.com'], ['leroy merlin', 'leroymerlin.es'], ['el corte ingles', 'elcorteingles.es'], ['shein', 'shein.com'], ['temu', 'temu.com'], ['primor', 'primor.eu'], ['druni', 'druni.es'], ['sephora', 'sephora.es'], ['action', 'action.com'], ['tiger', 'flyingtiger.com'], ['normal', 'normal.es'], ['miravia', 'miravia.es'], ['wallapop', 'wallapop.com'], ['vinted', 'vinted.es'],
+  ['zara', 'zara.com'], ['pull&bear', 'pullandbear.com'], ['pull and bear', 'pullandbear.com'], ['bershka', 'bershka.com'], ['primark', 'primark.com'], ['mango', 'mango.com'], ['h&m', 'hm.com'], ['stradivarius', 'stradivarius.com'], ['massimo dutti', 'massimodutti.com'], ['nike', 'nike.com'], ['adidas', 'adidas.es'], ['jd sports', 'jdsports.es'], ['springfield', 'springfield.com'], ['lefties', 'lefties.com'], ['kiabi', 'kiabi.es'], ['uniqlo', 'uniqlo.com'],
+  ['renfe', 'renfe.com'], ['rodalies', 'rodalies.gencat.cat'], ['tmb', 'tmb.cat'], ['sagales', 'sagales.com'], ['cabify', 'cabify.com'], ['uber', 'uber.com'], ['bolt', 'bolt.eu'], ['ryanair', 'ryanair.com'], ['vueling', 'vueling.com'], ['iberia', 'iberia.com'], ['booking', 'booking.com'], ['airbnb', 'airbnb.es'], ['blablacar', 'blablacar.es'], ['ouigo', 'ouigo.com'], ['iryo', 'iryo.eu'], ['alsa', 'alsa.es'], ['autopistas', 'autopistas.com'], ['saba', 'saba.es'], ['telpark', 'telpark.com'], ['parclick', 'parclick.com'], ['easypark', 'easypark.com'],
+  ['vodafone', 'vodafone.es'], ['orange', 'orange.es'], ['digi', 'digimobil.es'], ['pepephone', 'pepephone.com'], ['o2', 'o2online.es'], ['lowi', 'lowi.es'], ['simyo', 'simyo.es'], ['endesa', 'endesa.com'], ['iberdrola', 'iberdrola.es'], ['naturgy', 'naturgy.es'], ['holaluz', 'holaluz.com'],
+  ['bet365', 'bet365.es'], ['codere', 'codere.es'], ['william hill', 'williamhill.es'], ['bwin', 'bwin.es'], ['sportium', 'sportium.es'], ['betfair', 'betfair.es'], ['pokerstars', 'pokerstars.es'],
+  ['uoc', 'uoc.edu'], ['udemy', 'udemy.com'], ['coursera', 'coursera.org'], ['casa del libro', 'casadellibro.com'],
+  ['basic-fit', 'basic-fit.com'], ['basic fit', 'basic-fit.com'], ['mcfit', 'mcfit.com'], ['synergym', 'synergym.es'], ['anytime fitness', 'anytimefitness.es'], ['dir', 'dir.cat'], ['vivagym', 'vivagym.es'],
+  ['paypal', 'paypal.com'], ['revolut', 'revolut.com'], ['caixabank', 'caixabank.es'], ['imagin', 'imagin.com'], ['bbva', 'bbva.es'], ['santander', 'bancosantander.es'], ['sabadell', 'bancsabadell.com']
+];
+const LOGO_RE = LOGOS.map(([k, d]) => [new RegExp('(^|[^a-z0-9])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)'), d]);
+function normTxt(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
+function logoDomain(m) {
+  const key = normTxt(m.concepto);
+  if (!key) return null;
+  const custom = (S.prefs.logos || {})[key];
+  if (custom !== undefined) return custom || null;
+  for (const [re, d] of LOGO_RE) if (re.test(key)) return d;
+  return null;
+}
+function avatar(m, size = 44, radius = 15) {
+  const look = movLook(m);
+  const isz = Math.round(size * 0.45);
+  const fb = '<span class="ico" style="width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + 'px;background:' + rgba(look.color, 0.14) + ';color:' + look.color + '">' + icon(look.icono, isz) + '</span>';
+  const d = logoDomain(m);
+  if (!d) return fb;
+  return '<span class="logo" style="width:' + size + 'px;height:' + size + 'px">' +
+    '<span class="lt" style="border-radius:' + radius + 'px"><img src="https://www.google.com/s2/favicons?domain=' + encodeURIComponent(d) + '&amp;sz=128" alt="" loading="lazy" onload="if(this.naturalWidth<=16)this.closest(\'.logo\').classList.add(\'bad\')" onerror="this.closest(\'.logo\').classList.add(\'bad\')"></span>' +
+    '<span class="fb" style="border-radius:' + radius + 'px;background:' + rgba(look.color, 0.14) + ';color:' + look.color + '">' + icon(look.icono, isz) + '</span>' +
+    '<span class="cdot" style="background:' + look.color + '"></span></span>';
+}
+
+/* ---------- Color según cómo vas ---------- */
+
+function computeMood() {
+  const now = new Date(), y = now.getFullYear(), mo = now.getMonth(), day = now.getDate(), dim = daysIn(y, mo);
+  const budg = catsOf('gasto').filter((c) => c.presupuesto > 0);
+  const total = sum(budg.map((c) => c.presupuesto));
+  if (!total) return 'ok';
+  const md = monthData(y, mo);
+  const used = sum(budg.map((c) => md.byCat[c.nombre] || 0));
+  if (used >= total) return 'bad';
+  if (used / day * dim > total * 1.05 || used >= total * 0.85) return 'warn';
+  return 'ok';
+}
+
+/* ---------- Curva de ritmo ---------- */
+
+function curveHTML(y, mo, day) {
+  const dim = daysIn(y, mo);
+  const pd = new Date(y, mo - 1, 1);
+  const pdim = daysIn(pd.getFullYear(), pd.getMonth());
+  const cur = Array(dim + 1).fill(0), prev = Array(pdim + 1).fill(0);
+  monthData(y, mo).gastosAll.forEach((g) => { cur[parseD(g.fecha).getDate()] += g.importe; });
+  monthData(pd.getFullYear(), pd.getMonth()).gastosAll.forEach((g) => { prev[parseD(g.fecha).getDate()] += g.importe; });
+  for (let i = 1; i <= dim; i++) cur[i] += cur[i - 1];
+  for (let i = 1; i <= pdim; i++) prev[i] += prev[i - 1];
+  if (!cur[dim] && !prev[pdim]) return '';
+  const W = 322, H = 150, P = 10, X = Math.max(dim, pdim);
+  const maxY = Math.max(cur[day], prev[pdim], 1) * 1.08;
+  const px = (d) => (d / X * W);
+  const py = (v) => H - P - v / maxY * (H - 2 * P);
+  const line = (arr, to) => { const pts = []; for (let d = 0; d <= to; d++) pts.push([px(d), py(arr[d])]); return pts; };
+  const pc = line(prev, pdim), cc = line(cur, day);
+  const len = (pts) => { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; };
+  const str = (pts) => pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const area = 'M0 ' + (H - P) + ' L' + cc.map((p) => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L') + ' L' + cc[cc.length - 1][0].toFixed(1) + ' ' + (H - P) + ' Z';
+  const cmp = prev[Math.min(day, pdim)];
+  const diff = cur[day] - cmp;
+  const good = diff <= 0;
+  const last = cc[cc.length - 1];
+  const pm = MONTHS[pd.getMonth()];
+  return '<section class="card col in" aria-label="Ritmo de gasto" style="--d:.18s;gap:12px;border-radius:28px">' +
+    '<div class="between" style="align-items:flex-start"><div class="col" style="gap:3px"><h2 style="font-size:16px">Tu ritmo</h2><span class="small muted">A día ' + day + ' llevas ' + eur(cur[day], 0) + ' · en ' + pm + ' llevabas ' + eur(cmp, 0) + '</span></div>' +
+    (prev[pdim] ? '<span class="pill" style="font-size:12px;padding:6px 10px;color:' + (good ? acc() : '#FFB84D') + ';background:' + (good ? rgba(acc(), 0.1) : 'rgba(255,184,77,.12)') + '">' + eur(diff, 0, true) + '</span>' : '') + '</div>' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" fill="none" role="img" aria-label="Gasto acumulado este mes comparado con ' + pm + '" style="overflow:visible">' +
+    '<defs><linearGradient id="rg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + acc() + '" stop-opacity=".3"/><stop offset="1" stop-color="' + acc() + '" stop-opacity="0"/></linearGradient></defs>' +
+    [0.25, 0.5, 0.75].map((f) => '<path d="M0 ' + (P + (H - 2 * P) * f).toFixed(1) + 'H' + W + '" stroke="#1E1E23"/>').join('') +
+    (prev[pdim] ? '<polyline class="draw" points="' + str(pc) + '" stroke="#5C5C66" stroke-width="2" stroke-dasharray="5 5" stroke-linecap="round" style="--d:.3s;animation-name:fadeIn"/>' : '') +
+    '<path d="' + area + '" fill="url(#rg)" class="fade" style="--d:.9s"/>' +
+    '<polyline class="draw" points="' + str(cc) + '" stroke="' + acc() + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:' + (len(cc) * 1.08).toFixed(0) + ' 0;--d:.45s"/>' +
+    '<path d="M' + last[0].toFixed(1) + ' ' + P + 'V' + (H - P) + '" stroke="' + rgba(acc(), 0.25) + '" stroke-dasharray="2 4"/>' +
+    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + acc() + '"/>' +
+    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + acc() + '" style="transform-box:fill-box;transform-origin:center;animation:dotPulse 2s ease-out 1.4s infinite"/></svg>' +
+    '<div class="between small" style="color:var(--tx4);margin-top:-6px"><span>1</span><span>15</span><span>' + X + '</span></div>' +
+    '<div class="row small" style="gap:16px;color:var(--tx3)"><span class="row" style="gap:6px"><span style="width:16px;height:3px;border-radius:2px;background:' + acc() + '"></span>' + cap(MONTHS[mo]) + '</span>' + (prev[pdim] ? '<span class="row" style="gap:6px"><span style="width:16px;height:0;border-top:2px dashed #5C5C66"></span>' + cap(pm) + '</span>' : '') + '</div></section>';
+}
+
+/* ---------- Pantalla: ficha del movimiento ---------- */
+
+function scrMov() {
+  const m = S.data.movs.find((x) => x.id === S.ui.movId);
+  const back = TABS.includes(S.prevRoute) ? S.prevRoute : (S.prevRoute || 'movs');
+  if (!m) return '<div class="page sub">' + subHeader('Movimiento', back) + '<p class="muted">Este movimiento ya no existe.</p></div>' + tabbar('movs');
+  const look = movLook(m), d = parseD(m.fecha), amt = signed(m);
+  const key = normTxt(m.concepto);
+  const same = key ? S.data.movs.filter((x) => x.id !== m.id && normTxt(x.concepto) === key) : [];
+  const prevOne = same.find((x) => String(x.fecha) < String(m.fecha));
+  const inMonth = same.filter((x) => { const xd = parseD(x.fecha); return xd.getFullYear() === d.getFullYear() && xd.getMonth() === d.getMonth(); }).length + 1;
+  const avgHere = same.length ? (sum(same.map((x) => x.importe)) + m.importe) / (same.length + 1) : null;
+  const md = monthData(d.getFullYear(), d.getMonth());
+  const c = cat(m.categoria);
+  const catSpent = sum(md.gastosAll.filter((g) => g.categoria === m.categoria).map((g) => g.importe));
+  const pct = c.presupuesto ? catSpent / c.presupuesto * 100 : null;
+  const origen = { applepay: 'Apple Pay automático', siri: 'Siri', fijo: 'Pago fijo', 'fijo-largo': 'Pago fijo', manual: 'A mano' }[m.origen] || 'A mano';
+  const ticketSrc = S.tickets[m.id] || S.previews[m.id];
+  let ticket = '';
+  if (ticketSrc) ticket = '<button data-act="ticket-full" data-id="' + esc(m.id) + '" style="border:0;padding:0;background:none;border-radius:22px;overflow:hidden;max-height:340px"><img src="' + ticketSrc + '" alt="Foto del ticket" style="width:100%;display:block;object-fit:cover"></button>';
+  else if (m.ticket && m.ticket !== 'local') ticket = '<div class="grid2"><button class="btn ghost" data-act="ticket-load" data-id="' + esc(m.id) + '">' + (S.ticketLoading === m.id ? '<span style="animation:spin 1s linear infinite;display:flex">' + icon('refresh-cw', 18) + '</span>Cargando' : icon('image', 18) + 'Ver ticket') + '</button><a class="btn ghost" href="' + esc(m.ticket) + '" target="_blank" rel="noopener">' + icon('external-link', 18) + 'Drive</a></div>';
+  return '<div class="page sub">' + subHeader('Movimiento', back) +
+    '<section class="card hero col" style="view-transition-name:movcard;align-items:center;text-align:center;gap:12px;padding:26px 18px">' + avatar(m, 76, 24) +
+    '<span style="font-size:20px;font-weight:800;line-height:1.2">' + esc(m.concepto || m.categoria) + '</span>' +
+    '<span class="num" style="font-size:40px;font-weight:600;letter-spacing:-1.6px;color:' + (amt > 0 ? acc() : 'var(--tx)') + '">' + eur(amt, 2, true) + '</span>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;justify-content:center"><a href="#cat/' + encodeURIComponent(m.categoria) + '" class="chip" style="color:var(--tx)"><span class="dot" style="background:' + look.color + '"></span>' + esc(m.tipo === 'apuesta' ? (m.reto || 'Apuesta') : m.categoria) + '</a><span class="chip">' + cap(WD[d.getDay()]) + ' ' + d.getDate() + ' ' + MONTHS_S[d.getMonth()] + ' · ' + hhmm(m.fecha) + '</span></div></section>' +
+    (m.nota ? '<div class="card in" style="--d:.05s;border-radius:22px"><span class="small muted">Nota</span><p style="margin:4px 0 0;font-size:15px">' + esc(m.nota) + '</p></div>' : '') +
+    (ticket ? '<section class="col in" style="--d:.08s;gap:10px"><h2 style="font-size:16px">Ticket</h2>' + ticket + '</section>' : '') +
+    '<section class="grid2 in" style="--d:.12s">' +
+    '<div class="mini"><span class="l">Este mes, aquí</span><span class="v" style="font-size:15px">' + inMonth + ' ' + (inMonth === 1 ? 'vez' : 'veces') + '</span></div>' +
+    '<div class="mini"><span class="l">Media aquí</span><span class="v" style="font-size:15px">' + (avgHere ? eur(avgHere) : '—') + '</span></div>' +
+    '<div class="mini" style="grid-column:span 2"><span class="l">La última vez</span><span class="v" style="font-size:15px">' + (prevOne ? (() => { const pdd = parseD(prevOne.fecha); return eur(prevOne.importe) + ' el ' + pdd.getDate() + ' de ' + MONTHS[pdd.getMonth()]; })() : 'Es la primera vez que lo apuntas') + '</span></div></section>' +
+    (m.tipo === 'gasto' ? '<a href="#cat/' + encodeURIComponent(m.categoria) + '" class="card row in press" style="--d:.16s;gap:14px;border-radius:24px;color:var(--tx)"><div style="position:relative;width:58px;height:58px;flex-shrink:0">' + ring(58, 5, pct === null ? 0 : pct, pct !== null && pct >= 100 ? '#FF5D73' : pct !== null && pct >= 70 ? '#FFB84D' : acc(), 0.4) +
+      '<div style="position:absolute;inset:9px;border-radius:50%;background:' + rgba(c.color, 0.14) + ';color:' + c.color + ';display:flex;align-items:center;justify-content:center">' + icon(c.icono, 20) + '</div></div>' +
+      '<span class="col grow" style="gap:2px"><b style="font-size:15px">' + esc(m.categoria) + ' en ' + MONTHS[d.getMonth()] + '</b><span class="small muted">' + eur(catSpent) + (c.presupuesto ? ' de ' + eur(c.presupuesto, 0) + ' (' + Math.round(pct) + ' %)' : ' · sin presupuesto') + '</span></span><span style="color:#6E6E78">' + icon('chevron-right', 16, 2.4) + '</span></a>' : '') +
+    '<div class="card col in" style="--d:.2s;padding:0;overflow:hidden;border-radius:22px">' +
+    '<div class="between" style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.05)"><span class="muted small">Origen</span><b style="font-size:14px">' + origen + '</b></div>' +
+    '<div class="between" style="padding:14px 16px"><span class="muted small">Tipo</span><b style="font-size:14px">' + (m.tipo === 'apuesta' ? (m.cobro ? 'Apuesta · cobro' : 'Apuesta · depósito') : cap(m.tipo)) + '</b></div></div>' +
+    '<div class="grid2 in" style="--d:.24s"><button class="btn ghost" data-act="mov-edit" data-id="' + esc(m.id) + '">' + icon('pencil', 18) + 'Editar</button><button class="btn ghost" data-act="logo-edit" data-id="' + esc(m.id) + '">' + icon('image', 18) + 'Logo</button></div>' +
+    '<button class="btn ghost in" data-act="mov-del" data-id="' + esc(m.id) + '" style="--d:.26s;color:#FF8A9A">' + icon('trash-2', 18) + 'Borrar movimiento</button></div>' + tabbar(TABS.includes(back) ? back : 'movs');
+}
+
+/* ---------- Pantalla: detalle de categoría ---------- */
+
+function scrCat() {
+  const name = S.ui.catName;
+  const c = cat(name);
+  const now = new Date(), y = now.getFullYear(), mo = now.getMonth();
+  const mine = (yy, mm) => monthData(yy, mm).gastosAll.filter((g) => g.categoria === name);
+  const cur = mine(y, mo);
+  const spent = sum(cur.map((g) => g.importe));
+  const pct = c.presupuesto ? spent / c.presupuesto * 100 : null;
+  const col = pct === null ? c.color : pct >= 100 ? '#FF5D73' : pct >= 70 ? '#FFB84D' : acc();
+  const months = [];
+  for (let k = 5; k >= 0; k--) { const d = new Date(y, mo - k, 1); months.push({ label: cap(MONTHS_S[d.getMonth()]), v: sum(mine(d.getFullYear(), d.getMonth()).map((g) => g.importe)), cur: k === 0 }); }
+  const max = Math.max(1, ...months.map((x) => x.v));
+  const last3 = [];
+  for (let k = 0; k < 3; k++) { const d = new Date(y, mo - k, 1); last3.push(...mine(d.getFullYear(), d.getMonth())); }
+  const groups = {};
+  last3.forEach((g) => { const k = normTxt(g.concepto) || '—'; if (!groups[k]) groups[k] = { m: g, n: 0, t: 0 }; groups[k].n++; groups[k].t += g.importe; });
+  const top = Object.values(groups).sort((a, b) => b.t - a.t).slice(0, 5);
+  const topMax = Math.max(1, ...top.map((g) => g.t));
+  const avgBuy = last3.length ? sum(last3.map((g) => g.importe)) / last3.length : 0;
+  const avgMonth = sum(months.slice(0, 5).map((x) => x.v)) / Math.max(1, months.slice(0, 5).filter((x) => x.v).length);
+  return '<div class="page sub">' + glow(c.color, -100, 'right', 360, 12) + subHeader(esc(name), S.prevRoute && S.prevRoute !== 'cat' && S.prevRoute !== 'mov' ? S.prevRoute : 'inicio') +
+    '<section class="card hero row in" style="--d:.04s;gap:18px;padding:20px">' +
+    '<div style="position:relative;width:96px;height:96px;flex-shrink:0">' + ring(96, 8, pct === null ? 100 : pct, col, 0.35) +
+    '<div style="position:absolute;inset:14px;border-radius:50%;background:' + rgba(c.color, 0.14) + ';color:' + c.color + ';display:flex;align-items:center;justify-content:center">' + icon(c.icono, 30) + '</div></div>' +
+    '<div class="col grow" style="gap:4px"><span class="muted" style="font-size:13px">' + cap(MONTHS[mo]) + '</span><span class="num" data-count="' + spent.toFixed(2) + '" data-suffix=" €" style="font-size:30px;font-weight:600;letter-spacing:-1.2px">' + eur(spent) + '</span>' +
+    '<span class="small" style="color:' + col + ';font-weight:700">' + (c.presupuesto ? Math.round(pct) + ' % de ' + eur(c.presupuesto, 0) : 'Sin presupuesto') + '</span>' +
+    '<button class="chip" data-act="cat-budget" style="align-self:flex-start;margin-top:4px">' + icon('pencil', 13, 2.4) + (c.presupuesto ? 'Cambiar presupuesto' : 'Poner presupuesto') + '</button></div></section>' +
+    '<section class="card col in" style="--d:.1s;gap:12px;border-radius:26px"><div class="between"><h2 style="font-size:16px">Últimos 6 meses</h2><span class="small muted">Media ' + eur(avgMonth || 0, 0) + '/mes</span></div>' +
+    '<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:end;height:150px">' + months.map((x, i) => '<div class="col" style="align-items:center;gap:6px;justify-content:flex-end;height:150px"><span class="num" style="font-size:10px;font-weight:600;color:' + (x.cur ? c.color : 'var(--tx3)') + '">' + (x.v ? fmt(x.v, 0) : '') + '</span>' +
+      '<span class="growy" style="width:100%;height:' + Math.max(4, Math.round(x.v / max * 100)) + 'px;border-radius:8px;background:' + (x.cur ? c.color : rgba(c.color, 0.3)) + ';--d:' + (0.2 + i * 0.06).toFixed(2) + 's"></span><span style="font-size:11px;font-weight:700;color:' + (x.cur ? 'var(--tx)' : '#8A8A94') + '">' + x.label + '</span></div>').join('') + '</div></section>' +
+    (top.length ? '<section class="card col in" style="--d:.16s;gap:12px;border-radius:26px"><div class="between"><h2 style="font-size:16px">Dónde gastas más</h2><span class="small muted">3 meses</span></div>' +
+      top.map((g, i) => '<div class="row fade" style="--d:' + (0.25 + i * 0.05).toFixed(2) + 's;gap:12px">' + avatar(g.m, 40, 13) + '<div class="col grow" style="gap:5px"><div class="between"><b style="font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(g.m.concepto || name) + '</b><span class="num" style="font-size:13px;font-weight:600">' + eur(g.t, 0) + '</span></div>' +
+        '<div class="between small muted"><span>' + g.n + ' ' + (g.n === 1 ? 'vez' : 'veces') + ' · ' + eur(g.t / g.n) + ' de media</span></div><div class="bar" style="height:5px"><i class="growx" style="width:' + Math.round(g.t / topMax * 100) + '%;background:' + c.color + ';--d:' + (0.4 + i * 0.06).toFixed(2) + 's"></i></div></div></div>').join('') + '</section>' : '') +
+    '<div class="grid2 in" style="--d:.2s"><div class="mini"><span class="l">Media por compra</span><span class="v" style="font-size:15px">' + eur(avgBuy) + '</span></div><div class="mini"><span class="l">Compras este mes</span><span class="v" style="font-size:15px">' + cur.length + '</span></div></div>' +
+    '<section class="col in" style="--d:.24s;gap:8px"><h2 style="font-size:16px">Este mes</h2>' + (cur.length ? cur.map((m, i) => movRow(m, i + 4, false)).join('') : '<p class="muted small" style="margin:0">Aún nada en ' + MONTHS[mo] + '.</p>') + '</section></div>' + tabbar(TABS.includes(S.prevRoute) ? S.prevRoute : 'inicio');
+}
+
+/* ---------- Esqueleto de carga ---------- */
+
+function skeletonHTML() {
+  const b = (h, r = 22, extra = '') => '<div class="sk" style="height:' + h + 'px;border-radius:' + r + 'px;' + extra + '"></div>';
+  return '<div class="page">' + '<div class="between" style="align-items:center">' + b(46, 23, 'width:46px') + b(34, 17, 'width:120px') + '</div>' + b(34, 10, 'width:170px') + b(140, 30) + b(300, 30) +
+    '<div class="row" style="gap:12px">' + b(170, 24, 'width:134px;flex-shrink:0') + b(170, 24, 'width:134px;flex-shrink:0') + b(170, 24, 'width:134px;flex-shrink:0') + '</div>' + b(70, 20) + b(70, 20) + b(70, 20) + '<p class="small" style="text-align:center;color:var(--tx4)">Cargando tus datos…</p></div>' + tabbar(S.route);
+}
+
+/* ---------- Gestos: deslizar filas y tirar para sincronizar ---------- */
+
+(function gestures() {
+  let sw = null;
+  document.addEventListener('touchstart', (e) => {
+    const f = e.target.closest('.mov .front');
+    if (!f) { sw = null; return; }
+    const row = f.parentNode;
+    const openW = -parseFloat(getComputedStyle(row).getPropertyValue('--open')) || 216;
+    sw = { f, row, x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, mode: null, base: row.classList.contains('open') ? -openW : 0, openW };
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (!sw) return;
+    const dx = e.touches[0].clientX - sw.x, dy = e.touches[0].clientY - sw.y;
+    if (!sw.mode) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        sw.mode = 'h';
+        $$('.mov.open').forEach((x) => { if (x !== sw.row) x.classList.remove('open'); });
+        sw.f.style.transition = 'none';
+      } else if (Math.abs(dy) > 10) { sw.mode = 'v'; }
+    }
+    if (sw.mode !== 'h') return;
+    sw.dx = dx;
+    let x = sw.base + dx;
+    if (x > 0) x = x * 0.25;
+    if (x < -sw.openW) x = -sw.openW + (x + sw.openW) * 0.3;
+    sw.f.style.transform = 'translateX(' + x + 'px)';
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (!sw) return;
+    if (sw.mode === 'h') {
+      const final = sw.base + sw.dx;
+      sw.f.style.transition = '';
+      sw.f.style.transform = '';
+      sw.row.classList.toggle('open', final < -sw.openW / 2);
+      S.swiped = Date.now();
+    }
+    sw = null;
+  });
+
+  let py = null, pd = 0;
+  const ind = () => $('#ptr');
+  const hide = () => { const p = ind(); if (!p) return; p.classList.remove('ready', 'spin'); p.style.transform = ''; p.style.opacity = '0'; };
+  document.addEventListener('touchstart', (e) => {
+    py = null;
+    if (window.scrollY > 0 || S.ui.sheet || !['inicio', 'movs', 'objetivos', 'mas', 'analisis', 'fijos', 'apuestas', 'mensual', 'cat'].includes(S.route)) return;
+    if (e.target.closest('.mov .front')) return;
+    py = e.touches[0].clientY; pd = 0;
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (py === null) return;
+    pd = e.touches[0].clientY - py;
+    const p = ind();
+    if (!p) return;
+    if (pd <= 0 || window.scrollY > 0) { hide(); return; }
+    const d = Math.min(120, pd * 0.5);
+    p.style.opacity = String(Math.min(1, d / 50));
+    p.style.transform = 'translate(-50%,' + (d - 46) + 'px) rotate(' + (d * 4) + 'deg)';
+    p.classList.toggle('ready', d >= 70);
+  }, { passive: true });
+  document.addEventListener('touchend', async () => {
+    if (py === null) return;
+    const ready = pd * 0.5 >= 70;
+    py = null;
+    const p = ind();
+    if (!ready || !p) { hide(); return; }
+    p.classList.add('spin');
+    p.style.transform = 'translate(-50%, 34px)';
+    if (S.cfg.demo) { await new Promise((r) => setTimeout(r, 700)); toast('Todo al día'); }
+    else { await sync(); toast(S.syncErr ? 'No se pudo sincronizar' : 'Datos actualizados'); }
+    hide();
+  });
+})();
+
 /* ---------- Pantalla: Ajustes ---------- */
 
 function scrAjustes() {
@@ -1155,6 +1420,7 @@ function scrAjustes() {
     '<button class="btn ghost" data-act="nums-save">' + icon('check', 18) + 'Guardar</button><span class="small muted">Los presupuestos de cada categoría se cambian en la hoja «Categorias» de tu Sheet.</span></section>' +
     '<section class="card col in" style="--d:.15s;gap:14px;border-radius:26px"><h2>Apariencia</h2><div class="row" style="gap:12px">' +
     ACCENTS.map((c) => '<button data-act="accent" data-v="' + c + '" aria-label="Color ' + c + '" aria-pressed="' + (c === acc()) + '" style="width:48px;height:48px;border-radius:50%;background:' + c + ';border:3px solid ' + (c === acc() ? '#F4F4F5' : 'transparent') + ';box-shadow:' + (c === acc() ? '0 0 0 4px ' + rgba(c, 0.25) : 'none') + '"></button>').join('') + '</div>' +
+    '<button class="toggle" data-act="mood" aria-pressed="' + (S.prefs.mood !== false) + '"><span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:700">Color según cómo vas</span><span class="small muted">Lima si vas bien, ámbar si te acercas al presupuesto, rojo si te pasas</span></span><span class="switch' + (S.prefs.mood !== false ? ' on' : '') + '"></span></button>' +
     '<button class="toggle" data-act="calm" aria-pressed="' + S.prefs.calm + '"><span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:700">Reducir animaciones</span><span class="small muted">Para ir más rápido o ahorrar batería</span></span><span class="switch' + (S.prefs.calm ? ' on' : '') + '"></span></button></section>' +
     '<section class="card col in" style="--d:.2s;gap:12px;border-radius:26px"><h2>Datos</h2>' +
     '<button class="btn ghost" data-act="export">' + icon('download', 18) + 'Exportar a CSV (Excel)</button>' +
@@ -1222,6 +1488,14 @@ function sheetHTML() {
       '<label class="field"><span>Palabras del comercio (separadas por comas)</span><input class="input" data-inp="form.patrones" value="' + esc(F.patrones || '') + '" placeholder="repsol, galp, bp"></label>' +
       '<label class="field"><span>Categoría</span><select class="input" data-inp="form.categoria">' + catOpts('gasto', F.categoria) + '</select></label>' +
       '<button class="btn" data-act="regla-save">Guardar</button>' + (isNew ? '' : '<button class="btn ghost" data-act="regla-del" style="color:#FF8A9A">Borrar</button>');
+  } else if (sh.type === 'budget') {
+    body = '<h2>Presupuesto de ' + esc(sh.id) + '</h2><span class="small muted">Lo máximo que quieres gastar al mes en esta categoría. Déjalo a 0 para no tener tope.</span>' +
+      '<label class="field"><span>Euros al mes</span><input class="input" inputmode="decimal" data-inp="form.presupuesto" value="' + esc(F.presupuesto) + '"></label>' +
+      '<button class="btn" data-act="budget-save">Guardar</button>';
+  } else if (sh.type === 'logo') {
+    body = '<h2>Logo del comercio</h2><span class="small muted">Escribe la web de la marca (por ejemplo repsol.es) y la app usará su logo en todos los movimientos con este concepto. Déjalo vacío para usar el icono de la categoría.</span>' +
+      '<label class="field"><span>Web de la marca</span><input class="input" data-inp="form.dominio" value="' + esc(F.dominio) + '" placeholder="mercadona.es" autocapitalize="off" autocorrect="off" spellcheck="false"></label>' +
+      '<button class="btn" data-act="logo-save">Guardar</button>';
   } else if (sh.type === 'ticket') {
     body = '<h2>Ticket</h2><img src="' + sh.src + '" alt="Foto del ticket" style="width:100%;border-radius:18px">';
   }
@@ -1330,7 +1604,9 @@ const ACT = {
     const m = S.data.movs.find((x) => x.id === d.id);
     if (!m) return;
     enqueue({ action: 'delete_mov', id: m.id });
-    if (S.route === 'add') { S.ui.add = null; location.hash = '#movs'; } else render();
+    if (S.route === 'add') { S.ui.add = null; location.hash = '#movs'; }
+    else if (S.route === 'mov') { location.hash = '#' + (TABS.includes(S.prevRoute) ? S.prevRoute : 'movs'); }
+    else render();
     toast((m.concepto || m.categoria) + ' borrado', () => { enqueue({ action: 'add_mov', mov: m }); render(); });
   },
   'mov-ticket': (d) => {
@@ -1421,6 +1697,39 @@ const ACT = {
   'regla-save': () => { const F = S.ui.form; if (!String(F.patrones || '').trim()) return; enqueue({ action: 'upsert', sheet: 'Reglas', obj: { id: S.ui.sheet.id || uid(), patrones: F.patrones.trim(), categoria: F.categoria } }); closeSheet(); },
   'regla-del': () => { enqueue({ action: 'remove', sheet: 'Reglas', id: S.ui.sheet.id }); closeSheet(); },
   'sheet-close': () => closeSheet(),
+  'mov-open': (d, el) => {
+    if (Date.now() - (S.swiped || 0) < 450) return;
+    const row = el.closest('.mov');
+    if (row && row.classList.contains('open')) { row.classList.remove('open'); return; }
+    if ($$('.mov.open').length) { $$('.mov.open').forEach((x) => x.classList.remove('open')); return; }
+    $$('[style*="view-transition-name"]').forEach((x) => { x.style.viewTransitionName = ''; });
+    el.style.viewTransitionName = 'movcard';
+    location.hash = '#mov/' + encodeURIComponent(d.id);
+  },
+  'ticket-load': async (d) => {
+    if (S.cfg.demo) return;
+    S.ticketLoading = d.id; render();
+    try {
+      const j = await apiGet({ action: 'ticket', id: d.id });
+      S.tickets[d.id] = 'data:' + j.mime + ';base64,' + j.data;
+    } catch (e) { toast('No se pudo cargar: ' + e.message); }
+    S.ticketLoading = null; render();
+  },
+  'ticket-full': (d) => { S.ui.sheet = { type: 'ticket', src: S.tickets[d.id] || S.previews[d.id] }; render(); },
+  'cat-budget': () => { const c = cat(S.ui.catName); openSheet('budget', c.nombre, { presupuesto: c.presupuesto || '' }); },
+  'budget-save': () => { const v = parseAmount(S.ui.form.presupuesto); enqueue({ action: 'upsert', sheet: 'Categorias', key: 'nombre', obj: { nombre: S.ui.sheet.id, presupuesto: v } }); toast(v ? 'Presupuesto: ' + eur(v, 0) + ' al mes' : 'Sin presupuesto'); closeSheet(); },
+  'logo-edit': (d) => { const m = S.data.movs.find((x) => x.id === d.id); if (!m) return; openSheet('logo', m.id, { dominio: logoDomain(m) || '' }); },
+  'logo-save': () => {
+    const m = S.data.movs.find((x) => x.id === S.ui.sheet.id);
+    if (!m) return;
+    const dom = String(S.ui.form.dominio || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+    S.prefs.logos = S.prefs.logos || {};
+    S.prefs.logos[normTxt(m.concepto)] = dom;
+    store(LS.prefs, S.prefs);
+    toast(dom ? 'Logo de ' + dom + ' para «' + m.concepto + '»' : 'Logo quitado');
+    closeSheet();
+  },
+  mood: () => { S.prefs.mood = S.prefs.mood === false; store(LS.prefs, S.prefs); render(); },
   'tabla-year': (d) => { S.ui.tablaYear = Math.min(0, S.ui.tablaYear + Number(d.v)); S.lastRendered = null; render(); },
   'tabla-mes': (d) => { const now = new Date(); const y = now.getFullYear() + S.ui.tablaYear; S.ui.movMonth = (y - now.getFullYear()) * 12 + Number(d.m) - now.getMonth(); S.ui.movCat = 'Todo'; S.ui.movQ = ''; location.hash = '#movs'; },
   'tabla-export': () => exportTabla(),
@@ -1478,19 +1787,38 @@ const ACT = {
 
 /* ---------- Render y rutas ---------- */
 
-const SCREENS = { inicio: scrInicio, movs: scrMovs, add: scrAdd, objetivos: scrGoals, mas: scrMas, analisis: scrStats, mensual: scrMensual, simulador: scrSimulador, fijos: scrFijos, apuestas: scrApuestas, resumen: scrResumen, applepay: scrApplePay, ajustes: scrAjustes, setup: scrSetup };
+const SCREENS = { inicio: scrInicio, movs: scrMovs, add: scrAdd, objetivos: scrGoals, mas: scrMas, analisis: scrStats, mensual: scrMensual, simulador: scrSimulador, mov: scrMov, cat: scrCat, fijos: scrFijos, apuestas: scrApuestas, resumen: scrResumen, applepay: scrApplePay, ajustes: scrAjustes, setup: scrSetup };
 
-function render() {
+function render(opts = {}) {
   const app = $('#app');
-  const fresh = S.route !== S.lastRendered;
-  S.lastRendered = S.route;
+  const key = S.route + '/' + (S.routeParam || '');
+  const fresh = key !== S.lastRendered;
+  S.lastRendered = key;
   if (S.route === 'add' && !S.ui.add) S.ui.add = newAdd();
+  S.mood = computeMood();
+  document.documentElement.style.setProperty('--acc', acc());
   const y = window.scrollY;
-  app.innerHTML = '<div class="' + (fresh ? '' : 'noanim') + '">' + (SCREENS[S.route] || scrInicio)() + '</div>' + sheetHTML();
-  if (fresh) { window.scrollTo(0, 0); animateCounts(); } else window.scrollTo(0, y);
+  const showSkel = S.syncing && !S.cfg.demo && !S.data.cats.length && ['inicio', 'movs', 'objetivos', 'mas'].includes(S.route);
+  const html = showSkel ? skeletonHTML() : (SCREENS[S.route] || scrInicio)();
+  app.innerHTML = '<div class="' + (fresh && !opts.vt ? '' : 'noanim') + '">' + html + '</div>' + sheetHTML();
+  if (fresh) { window.scrollTo(0, 0); if (!opts.vt) animateCounts(); } else window.scrollTo(0, y);
+}
+const TABS = ['inicio', 'movs', 'add', 'objetivos', 'mas'];
+function transitionDir(from, to) {
+  if (to === 'add') return 'up';
+  if (from === 'add') return 'down';
+  const df = TABS.includes(from) ? 0 : 1, dt = TABS.includes(to) ? 0 : 1;
+  if (dt !== df) return dt > df ? 'fwd' : 'back';
+  const a = TABS.indexOf(from), b = TABS.indexOf(to);
+  return a > -1 && b > -1 && b < a ? 'back' : 'fwd';
 }
 function onRoute() {
-  const r = (location.hash || '#inicio').slice(1) || 'inicio';
+  const full = (location.hash || '#inicio').slice(1) || 'inicio';
+  const slash = full.indexOf('/');
+  const r = slash > -1 ? full.slice(0, slash) : full;
+  S.routeParam = slash > -1 ? decodeURIComponent(full.slice(slash + 1)) : '';
+  if (r === 'mov') S.ui.movId = S.routeParam;
+  if (r === 'cat') S.ui.catName = S.routeParam;
   const from = S.route;
   if (from === 'add' && r !== 'add') S.ui.add = null;
   if (r !== 'resumen') clearTimeout(S.storyTimer);
@@ -1500,7 +1828,13 @@ function onRoute() {
   S.route = SCREENS[r] ? r : 'inicio';
   S.ui.sheet = null;
   if (!S.cfg.url && !S.cfg.demo && S.route !== 'setup') { location.replace('#setup'); return; }
-  render();
+  const useVT = !!document.startViewTransition && !!S.lastRendered && !S.prefs.calm && !matchMedia('(prefers-reduced-motion: reduce)').matches && S.route !== 'resumen' && from !== 'resumen';
+  if (useVT) {
+    document.documentElement.dataset.dir = transitionDir(from, S.route);
+    document.startViewTransition(() => render({ vt: true }));
+  } else {
+    render();
+  }
   if (S.route === 'resumen') armStory();
 }
 function applyPrefs() {
