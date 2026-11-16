@@ -1,6 +1,6 @@
 // Service worker de Gastos: guarda la app para que abra sin conexión.
 // Si cambias algún archivo de la app, sube el número de versión.
-const VERSION = 'gastos-v1';
+const VERSION = 'gastos-v2';
 const SHELL = ['./', 'index.html', 'app.js', 'icons.js', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {

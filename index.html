@@ -113,6 +113,21 @@ input::placeholder{color:var(--tx4)}
 .toast button{min-height:38px;padding:0 14px;border-radius:12px;border:0;background:#0B0B0D;color:var(--acc);font-size:13px;font-weight:800}
 .banner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:16px;font-size:13px;font-weight:700}
 
+
+/* Tabla tipo Excel */
+.tablewrap{overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tablewrap::-webkit-scrollbar{display:none}
+table.xl{border-collapse:separate;border-spacing:0;font-size:12px;font-variant-numeric:tabular-nums}
+table.xl th{position:sticky;left:0;z-index:2;background:#0B0B0D;text-align:left;font-weight:700;padding:9px 12px 9px 2px;white-space:nowrap;min-width:132px;max-width:150px;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(255,255,255,.05);box-shadow:6px 0 10px -6px rgba(0,0,0,.8)}
+table.xl td{padding:9px 10px;text-align:right;white-space:nowrap;min-width:62px;border-bottom:1px solid rgba(255,255,255,.05);font-weight:600;color:#DADAE0}
+table.xl td.tot{background:#141417;color:var(--tx);font-weight:800}
+table.xl td.fut{color:#2C2C33;text-align:center}
+table.xl tr.hd td,table.xl tr.hd th{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--tx3)}
+table.xl tr.hd button{border:0;background:rgba(255,255,255,.07);color:var(--tx);font-size:11px;font-weight:800;padding:6px 9px;border-radius:8px;text-transform:uppercase}
+table.xl tr.sec th{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--acc);padding-top:18px;font-weight:800}
+table.xl tr.sec td{border-bottom-color:transparent}
+table.xl tr.strong th,table.xl tr.strong td{font-weight:800;color:var(--tx);border-top:1px solid rgba(255,255,255,.14)}
+table.xl th .dot{display:inline-block;margin-right:7px;vertical-align:middle}
 /* Teclado */
 .keys{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .keys button{min-height:54px;border-radius:18px;border:0;background:#16161A;font-family:var(--num);font-size:22px;font-weight:500;transition:transform .12s,background-color .2s}
