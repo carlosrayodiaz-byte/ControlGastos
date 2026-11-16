@@ -1026,7 +1026,8 @@ function tablaData(y) {
   const pct = ahorro.map((v, m) => (totIng[m] ? v / totIng[m] * 100 : 0));
   const bets = months.map((md) => (md ? md.ret - md.dep : 0));
   let acc0 = 0; const acum = ahorro.map((v, m) => (months[m] ? (acc0 += v) : 0));
-  return { y, lastM, months, ing, gas, ingOrder: order(ing), gasOrder: order(gas), totIng, totGas, ahorro, pct, bets, acum, n: lastM + 1 };
+  const withData = months.filter((md) => md && (md.cash || md.income)).length;
+  return { y, lastM, months, ing, gas, ingOrder: order(ing), gasOrder: order(gas), totIng, totGas, ahorro, pct, bets, acum, n: lastM + 1, nData: Math.max(1, withData) };
 }
 function scrMensual() {
   const y = new Date().getFullYear() + S.ui.tablaYear;
@@ -1039,7 +1040,7 @@ function scrMensual() {
   };
   const totals = (arr, opts = {}) => {
     const t = sum(arr.slice(0, T.n));
-    const media = T.n ? t / T.n : 0;
+    const media = opts.pct ? sum(arr.slice(0, T.n)) / T.nData : t / T.nData;
     return '<td class="tot">' + (opts.pct ? '' : fmt(t, 0, opts.sign)) + '</td><td class="tot">' + (opts.pct ? fmt(media, 0) + ' %' : fmt(media, 0, opts.sign)) + '</td>';
   };
   const row = (label, arr, opts = {}) => '<tr class="' + (opts.cls || '') + '"><th>' + (opts.dot ? '<span class="dot" style="background:' + opts.dot + ';width:7px;height:7px"></span>' : '') + esc(label) + '</th>' +
@@ -1075,7 +1076,7 @@ function exportTabla() {
   const T = tablaData(y);
   const n2 = (v) => fmt(v).replace('−', '-').replace(/\./g, '');
   const rows = [['Concepto'].concat(MONTHS.map(cap), ['Total', 'Media'])];
-  const add = (label, arr) => { const t = sum(arr.slice(0, T.n)); rows.push([label].concat(arr.map((v, m) => (m <= T.lastM ? n2(v) : '')), [n2(t), n2(T.n ? t / T.n : 0)])); };
+  const add = (label, arr) => { const t = sum(arr.slice(0, T.n)); rows.push([label].concat(arr.map((v, m) => (m <= T.lastM ? n2(v) : '')), [n2(t), n2(t / T.nData)])); };
   rows.push(['INGRESOS']); T.ingOrder.forEach((k) => add(k, T.ing[k])); add('Total ingresos', T.totIng);
   rows.push(['GASTOS']); T.gasOrder.forEach((k) => add(k, T.gas[k])); add('Total gastos', T.totGas);
   rows.push(['RESULTADO']); add('Ahorro', T.ahorro); add('Ahorro acumulado', T.acum); add('Apuestas (neto)', T.bets);
