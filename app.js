@@ -277,10 +277,10 @@ function glow(color, top, side, size = 380, dur = 12) {
   return '<div class="glow" aria-hidden="true" style="top:' + top + 'px;' + side + ':-110px;width:' + size + 'px;height:' + size + 'px;background:radial-gradient(circle,' + rgba(color, 0.14) + ',rgba(0,0,0,0) 65%);animation-duration:' + dur + 's"></div>';
 }
 function syncChip() {
-  let label = 'Sincronizado', color = acc(), ic = null, anim = 'livePulse 2s ease-out infinite';
+  let label = 'Sincronizado', color = acc(), ic = null, anim = 'livePulse 2s ease-out 2';
   if (S.cfg.demo) { label = 'Modo demo'; color = '#FFB84D'; anim = 'none'; }
   else if (S.syncing) { label = 'Sincronizando'; anim = 'none'; ic = 'refresh-cw'; }
-  else if (S.queue.length) { label = S.queue.length + ' pendiente' + (S.queue.length > 1 ? 's' : ''); color = '#FFB84D'; anim = 'amberPulse 1.8s ease-out infinite'; }
+  else if (S.queue.length) { label = S.queue.length + ' pendiente' + (S.queue.length > 1 ? 's' : ''); color = '#FFB84D'; anim = 'amberPulse 1.8s ease-out 2'; }
   else if (S.syncErr) { label = S.syncErr; color = '#FF5D73'; anim = 'none'; ic = 'cloud-off'; }
   const lead = ic ? '<span style="color:' + color + ';' + (S.syncing ? 'animation:spin 1s linear infinite' : '') + '">' + icon(ic, 14, 2.4) + '</span>' : '<span class="dot" style="background:' + color + ';animation:' + anim + '"></span>';
   return '<button id="syncchip" data-act="sync" class="row press" style="gap:8px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);font-size:12px;font-weight:700;color:#C8C8D0">' + lead + '<span>' + esc(label) + '</span></button>';
@@ -298,9 +298,8 @@ function tank(size, pct, color, inner) {
   const top = Math.round(size * (1 - p / 100)) - Math.round(size * 0.04);
   const w = size * 2;
   return '<div style="position:relative;width:' + size + 'px;height:' + size + 'px;flex-shrink:0;border-radius:50%;overflow:hidden;background:#1B1B20;box-shadow:inset 0 0 0 2px ' + rgba(color, 0.22) + ',0 0 50px ' + rgba(color, 0.08) + '">' +
-    '<div aria-hidden="true" style="position:absolute;left:' + (-size / 2) + 'px;top:' + (top - 6) + 'px;width:' + w + 'px;height:' + w + 'px;border-radius:42%;background:' + rgba(color, 0.38) + ';animation:spin 9s linear infinite,fillUp 2s var(--ease) .3s backwards"></div>' +
-    '<div aria-hidden="true" style="position:absolute;left:' + (-size / 2) + 'px;top:' + top + 'px;width:' + w + 'px;height:' + w + 'px;border-radius:40%;background:' + color + ';animation:spin 6s linear infinite reverse,fillUp 2s var(--ease) .3s backwards"></div>' +
-    '<span aria-hidden="true" style="position:absolute;left:32%;bottom:6px;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.7);animation:bubble 3s ease-in 2.4s infinite"></span>' +
+    '<div aria-hidden="true" style="position:absolute;left:' + (-size / 2) + 'px;top:' + (top - 6) + 'px;width:' + w + 'px;height:' + w + 'px;border-radius:42%;background:' + rgba(color, 0.38) + ';animation:fillUp 2s var(--ease) .3s backwards"></div>' +
+    '<div aria-hidden="true" style="position:absolute;left:' + (-size / 2) + 'px;top:' + top + 'px;width:' + w + 'px;height:' + w + 'px;border-radius:40%;background:' + color + ';animation:fillUp 2s var(--ease) .3s backwards"></div>' +
     '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:' + Math.round(size * 0.14) + 'px">' + inner + '</div></div>';
 }
 
@@ -310,7 +309,7 @@ function movRow(m, i, withActs) {
   const amt = signed(m);
   const color = amt > 0 ? acc() : (m.tipo === 'apuesta' ? '#FF8A9A' : 'var(--tx)');
   const tags = [];
-  if (m.origen === 'applepay') tags.push('<span class="tag" style="color:#C3B9FF;background:rgba(139,124,255,.13)">' + icon('zap', 10, 2.6) + 'Auto</span>');
+  if (m.origen === 'applepay') tags.push('<span class="tag" style="color:#A8E2FF;background:rgba(90,200,255,.13)">' + icon('zap', 10, 2.6) + 'Auto</span>');
   if (m.origen === 'siri') tags.push('<span class="tag" style="color:#F9A8D4;background:rgba(244,114,182,.13)">' + icon('mic', 10, 2.6) + 'Siri</span>');
   if (m.origen === 'fijo' || m.origen === 'fijo-largo') tags.push('<span class="tag" style="color:#FFB84D;background:rgba(255,184,77,.12)">' + icon('repeat', 10, 2.6) + 'Fijo</span>');
   if (m.ticket) tags.push('<span class="tag" style="color:#C8C8D0;background:rgba(255,255,255,.07)">' + icon('receipt', 10, 2.6) + 'Ticket</span>');
@@ -325,7 +324,7 @@ function movRow(m, i, withActs) {
   if (!withActs) return '<button class="row in movlite" data-act="mov-open" data-id="' + esc(m.id) + '" style="width:100%;text-align:left;padding:12px;border-radius:20px;background:var(--s1);border:1px solid rgba(255,255,255,.05);' + delay + '">' + front + '</button>';
   const acts = [];
   if (m.ticket) acts.push('<button data-act="mov-ticket" data-id="' + esc(m.id) + '" style="background:#5AC8FF">' + icon('receipt', 18) + 'Ticket</button>');
-  acts.push('<button data-act="mov-edit" data-id="' + esc(m.id) + '" style="background:#8B7CFF">' + icon('pencil', 18) + 'Editar</button>');
+  acts.push('<button data-act="mov-edit" data-id="' + esc(m.id) + '" style="background:#5AC8FF">' + icon('pencil', 18) + 'Editar</button>');
   acts.push('<button data-act="mov-del" data-id="' + esc(m.id) + '" style="background:#FF5D73">' + icon('trash-2', 18) + 'Borrar</button>');
   return '<div class="mov in" style="' + delay + ';--open:-' + (acts.length * 72) + 'px"><div class="acts">' + acts.join('') + '</div>' +
     '<button class="front" data-act="mov-open" data-id="' + esc(m.id) + '" aria-label="' + esc(title) + '">' + front + '</button></div>';
@@ -367,7 +366,7 @@ function scrInicio() {
   let banner = '';
   if (nc) {
     const dd = dayDiff(new Date(), nc.d);
-    if (dd <= 3) banner = '<a href="#fijos" class="banner in" style="--d:.06s;background:rgba(255,184,77,.1);border:1px solid rgba(255,184,77,.25);color:#FFD08A"><span class="dot" style="background:#FFB84D;animation:amberPulse 1.8s ease-out infinite"></span><span class="grow">' + (dd === 0 ? 'Hoy' : dd === 1 ? 'Mañana' : 'En ' + dd + ' días') + ' te cobran ' + esc(nc.f.nombre) + ' (' + eur(nc.f.importe) + ')</span>' + icon('chevron-right', 16, 2.4) + '</a>';
+    if (dd <= 3) banner = '<a href="#fijos" class="banner in" style="--d:.06s;background:rgba(255,184,77,.1);border:1px solid rgba(255,184,77,.25);color:#FFD08A"><span class="dot" style="background:#FFB84D"></span><span class="grow">' + (dd === 0 ? 'Hoy' : dd === 1 ? 'Mañana' : 'En ' + dd + ' días') + ' te cobran ' + esc(nc.f.nombre) + ' (' + eur(nc.f.importe) + ')</span>' + icon('chevron-right', 16, 2.4) + '</a>';
   }
 
   const tiles = budg.map((c, i) => {
@@ -385,15 +384,14 @@ function scrInicio() {
   const latest = S.data.movs.slice(0, 5);
   const empty = !S.data.movs.length;
 
-  return '<div class="page">' + glow(acc(), -110, 'left') + glow('#8B7CFF', 640, 'right', 320, 14) +
-    '<header class="between in" style="align-items:center"><div class="row"><div aria-hidden="true" style="width:46px;height:46px;border-radius:50%;padding:2px;background:conic-gradient(' + acc() + ',#8B7CFF,' + acc() + ')"><div style="width:100%;height:100%;border-radius:50%;background:#16161A;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:16px;font-weight:600">' + esc((S.data.config.nombre || 'C').charAt(0)) + '</div></div>' +
+  return '<div class="page">' + glow(acc(), -110, 'left') + glow('#5AC8FF', 640, 'right', 320, 14) +
+    '<header class="between in" style="align-items:center"><div class="row"><div aria-hidden="true" style="width:46px;height:46px;border-radius:50%;padding:2px;background:conic-gradient(' + acc() + ',#5AC8FF,' + acc() + ')"><div style="width:100%;height:100%;border-radius:50%;background:#16161A;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:16px;font-weight:600">' + esc((S.data.config.nombre || 'C').charAt(0)) + '</div></div>' +
     '<div class="col" style="gap:1px"><span class="muted" style="font-size:13px">' + hello + '</span><span style="font-size:18px;font-weight:700">' + esc(S.data.config.nombre || 'Carlos') + '</span></div></div>' + syncChip() + '</header>' +
     '<div class="between in" style="--d:.04s;align-items:center"><h1>' + cap(MONTHS[mo]) + '</h1><a href="#mensual" class="chip" style="color:var(--tx)">' + icon('sheet', 15, 2.2) + 'Resumen</a></div>' + banner +
-    '<section class="in oncolor" aria-label="Puedes gastar hoy" style="--d:.08s;position:relative;overflow:hidden;border-radius:30px;padding:22px 20px;background:var(--mood);color:#0B0B0D;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 18px 40px var(--moodglow);transition:background-color .5s">' +
-    '<div aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:35%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.45),rgba(255,255,255,0));animation:shimmer 4s ease-in-out 1.6s infinite"></div>' +
+    '<section class="in oncolor" aria-label="Puedes gastar hoy" style="--d:.08s;position:relative;overflow:hidden;border-radius:28px;padding:22px 20px;background:var(--mood);color:#0B0B0D;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:0 18px 40px var(--moodglow);transition:background-color .5s">' +
     '<div class="col" style="position:relative;gap:4px"><span style="font-size:13px;font-weight:800">Puedes gastar hoy</span><span class="num" data-count="' + today.toFixed(2) + '" data-big data-count-key="today" style="font-size:42px;font-weight:700;letter-spacing:-1.8px">' + eurBig(today) + '</span>' +
     '<span style="font-size:12px;font-weight:600;opacity:.72">' + (remaining < 0 ? 'Te has pasado ' + eur(-remaining, 0) + ' del presupuesto del mes.' : (S.mood === 'warn' && S.prefs.mood !== false ? 'Vas por encima de tu ritmo. ' : '') + eur(remaining, 0) + ' para los ' + daysLeft + ' días que quedan.') + (pendNames.length ? ' Ya descuenta ' + esc(pendNames.join(', ')) + '.' : '') + '</span></div>' +
-    '<div aria-hidden="true" style="position:relative;width:64px;height:64px;flex-shrink:0;animation:floaty 3.2s ease-in-out infinite">' + ring(64, 6, daysLeft / dim * 100, '#0B0B0D', 0.6, 'rgba(11,11,13,.14)') +
+    '<div aria-hidden="true" style="position:relative;width:64px;height:64px;flex-shrink:0">' + ring(64, 6, daysLeft / dim * 100, '#0B0B0D', 0.6, 'rgba(11,11,13,.14)') +
     '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1"><span class="num" style="font-size:16px;font-weight:700">' + daysLeft + '</span><span style="font-size:9px;font-weight:800">días</span></div></div></section>' +
 
     // % de la nómina: una línea bajo la tarjeta
@@ -582,7 +580,7 @@ function scrAdd() {
     '<div class="glow" aria-hidden="true" style="top:40px;left:50%;margin-left:-180px;width:360px;height:240px;background:radial-gradient(ellipse,' + rgba(cur.color, 0.15) + ',rgba(0,0,0,0) 68%);animation:none"></div>' +
     '<header class="row in" style="gap:10px"><a href="#' + (a.id ? 'movs' : S.prevRoute || 'inicio') + '" class="ibtn" aria-label="Cerrar">' + icon('x', 18, 2.4) + '</a>' + head +
     (a.id ? '<button class="ibtn" data-act="mov-del" data-id="' + esc(a.id) + '" aria-label="Borrar movimiento" style="color:#FF8A9A">' + icon('trash-2', 18) + '</button>' : '') + '</header>' +
-    (a.id ? '<p class="small in" style="margin:-4px 0 -4px;text-align:center;color:#C3B9FF;font-weight:700">Editando movimiento</p>' : '') +
+    (a.id ? '<p class="small in" style="margin:-4px 0 -4px;text-align:center;color:#A8E2FF;font-weight:700">Editando movimiento</p>' : '') +
     '<div class="col in" aria-live="polite" style="--d:.04s;align-items:center;gap:2px">' +
     '<div class="row" style="gap:3px"><span id="amt" class="num amtv" style="font-weight:600;line-height:1.08;color:' + amtColor + ';display:inline-block">' + esc(a.amount) + '</span>' +
     '<span class="amtcur" aria-hidden="true" style="width:3px;border-radius:2px;background:' + acc() + ';animation:blink 1s infinite"></span><span class="num" style="font-size:26px;font-weight:500;color:var(--tx4);margin-left:5px">€</span></div>' +
@@ -593,7 +591,6 @@ function scrAdd() {
     '<div style="flex:1 1 0;min-height:0"></div>' +
     '<div class="keys in" role="group" aria-label="Teclado numérico" style="--d:.16s">' + ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'].map((k) => '<button data-act="key" data-v="' + k + '" aria-label="' + (k === '⌫' ? 'Borrar' : k === ',' ? 'Coma decimal' : k) + '">' + k + '</button>').join('') + '</div>' +
     '<button id="savebtn" class="btn block in savebtn" data-act="add-save" style="--d:.2s;min-height:58px;font-size:16px;position:relative;overflow:hidden;flex-shrink:0;box-shadow:0 14px 34px ' + rgba(acc(), 0.28) + '">' +
-    '<span aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:70px;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));animation:shimmer 3.4s ease-in-out 1s infinite"></span>' +
     '<span style="position:relative">' + (a.id ? 'Guardar cambios' : a.tipo === 'ingreso' ? 'Guardar ingreso' : 'Guardar gasto') + '</span></button>' +
     '</div>';
 }
@@ -610,7 +607,7 @@ function detallesSheetHTML() {
     '<button class="btn dash block" data-act="ticket-pick" style="min-height:50px">' + icon('camera', 18) + 'Foto del ticket</button>';
   const flagTitle = isBet ? 'Es un cobro' : 'Repetir cada mes';
   const flagSub = isBet ? (a.flag ? 'Dinero que retiraste de la casa' : 'Cuenta como depósito') : (a.flag ? 'Se añadirá a Fijos y suscripciones' : 'Movimiento puntual');
-  const flagColor = isBet ? acc() : '#8B7CFF';
+  const flagColor = isBet ? acc() : '#5AC8FF';
   return '<h2>Detalles</h2>' +
     '<label class="field"><span>Concepto</span><input id="addconcepto" class="input" data-inp="add.concepto" data-live="add-concepto" value="' + esc(a.concepto) + '" placeholder="Repsol, Mercadona…" autocomplete="off"></label>' +
     '<span id="rulehint" class="small" style="margin-top:-8px;color:#C9F23A;font-weight:700;' + (a.ruleHint ? '' : 'display:none') + '">' + esc(a.ruleHint || '') + '</span>' +
@@ -652,7 +649,7 @@ function scrGoals() {
     const steps = [0.25, 0.5, 0.75].map((f) => main.objetivo * f);
     const nextMs = [0.25, 0.5, 0.75, 1].map((f) => main.objetivo * f).find((v) => v > main.ahorrado);
     mainHTML = '<section class="card hero col in" style="--d:.08s;align-items:center;gap:18px;padding:22px 18px 18px">' +
-      '<div class="between" style="align-self:stretch;align-items:center"><div class="col" style="gap:2px"><span style="font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--tx3)">Meta principal</span><h2 style="font-size:20px">' + esc(main.nombre) + '</h2></div>' +
+      '<div class="between" style="align-self:stretch;align-items:center"><div class="col" style="gap:2px"><span class="eyebrow">Meta principal</span><h2 style="font-size:20px">' + esc(main.nombre) + '</h2></div>' +
       (eta ? '<span class="pill" style="background:' + acc() + ';color:#0B0B0D;font-size:12px;padding:5px 10px">' + eta + '</span>' : '') + '</div>' +
       '<button data-act="meta-open" data-id="' + esc(main.id) + '" style="border:0;background:none;padding:0;border-radius:50%" aria-label="Aportar o editar ' + esc(main.nombre) + '">' +
       tank(170, p, main.color || acc(), '<span class="num" style="font-size:34px;font-weight:600;letter-spacing:-1.2px">' + Math.round(p) + ' %</span><span style="font-size:12px;font-weight:700;color:var(--tx2)">' + fmt(main.ahorrado, 0) + ' €</span>') + '</button>' +
@@ -696,7 +693,7 @@ function scrMas() {
       ['apuestas', 'Apuestas', allBets.length ? 'Historial · balance total ' + eur(betNet, 2, true) : 'Historial (sin movimientos)', '#FF5D73', 'ticket']
     ]],
     ['Automático', [
-      ['applepay', 'Apple Pay y Siri', S.cfg.demo ? 'Configúralo cuando conectes tu Sheet' : autos + ' pagos apuntados solos este mes', '#8B7CFF', 'zap']
+      ['applepay', 'Apple Pay y Siri', S.cfg.demo ? 'Configúralo cuando conectes tu Sheet' : autos + ' pagos apuntados solos este mes', '#5AC8FF', 'zap']
     ]],
     ['Ajustes', [
       ['ajustes', 'Ajustes', 'Conexión, apariencia y exportar', '#C8C8D0', 'settings']
@@ -704,15 +701,14 @@ function scrMas() {
   ];
   let k = 0;
   return '<div class="page"><h1 class="in">Más</h1>' +
-    '<a href="#resumen" class="row in" style="--d:.06s;position:relative;overflow:hidden;min-height:150px;padding:20px;border-radius:30px;background:linear-gradient(135deg,#1C1A33,#141417 60%);border:1px solid rgba(139,124,255,.25);color:var(--tx);gap:16px">' +
-    '<div aria-hidden="true" style="position:absolute;top:0;bottom:0;left:0;width:35%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.06),rgba(255,255,255,0));animation:shimmer 4s ease-in-out 1.2s infinite"></div>' +
-    '<div class="col grow" style="position:relative;gap:6px"><span class="row" style="gap:6px;font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#C3B9FF"><span class="dot" style="background:#8B7CFF;width:7px;height:7px"></span>Resumen</span>' +
+    '<a href="#resumen" class="row in" style="--d:.06s;position:relative;overflow:hidden;min-height:150px;padding:20px;border-radius:28px;background:linear-gradient(135deg,#1C1A33,#141417 60%);border:1px solid rgba(90,200,255,.25);color:var(--tx);gap:16px">' +
+    '<div class="col grow" style="position:relative;gap:6px"><span class="row eyebrow" style="gap:6px;color:#A8E2FF"><span class="dot" style="background:#5AC8FF;width:7px;height:7px"></span>Resumen</span>' +
     '<span class="num" style="font-size:20px;font-weight:600;letter-spacing:-.5px;line-height:1.2">Tu ' + pm + ', en historias</span><span class="muted" style="font-size:13px">5 tarjetas con lo más destacado del mes cerrado.</span></div>' +
     '<div aria-hidden="true" style="position:relative;width:100px;height:120px;flex-shrink:0">' +
-    '<span style="position:absolute;left:4px;top:14px;width:60px;height:94px;border-radius:14px;background:#FF9F5A;transform:rotate(-12deg);animation:floaty 4s ease-in-out infinite"></span>' +
-    '<span style="position:absolute;left:20px;top:8px;width:60px;height:94px;border-radius:14px;background:#8B7CFF;transform:rotate(4deg);animation:floaty 4.6s ease-in-out infinite"></span>' +
-    '<span style="position:absolute;left:38px;top:12px;width:60px;height:94px;border-radius:14px;background:' + acc() + ';color:#0B0B0D;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:13px;font-weight:700;transform:rotate(14deg);animation:floaty 4.2s ease-in-out infinite">' + MONTHS_S[prev.getMonth()].toUpperCase() + '</span></div></a>' +
-    groups.map(([title, items], gi) => '<section class="col in" style="--d:' + (0.14 + gi * 0.1).toFixed(2) + 's;gap:10px"><h2 style="padding:0 4px;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:#8A8A94">' + title + '</h2><div class="card" style="padding:0;overflow:hidden">' +
+    '<span style="position:absolute;left:4px;top:14px;width:60px;height:94px;border-radius:14px;background:#FF9F5A;transform:rotate(-12deg)"></span>' +
+    '<span style="position:absolute;left:20px;top:8px;width:60px;height:94px;border-radius:14px;background:#5AC8FF;transform:rotate(4deg)"></span>' +
+    '<span style="position:absolute;left:38px;top:12px;width:60px;height:94px;border-radius:14px;background:' + acc() + ';color:#0B0B0D;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:13px;font-weight:700;transform:rotate(14deg)">' + MONTHS_S[prev.getMonth()].toUpperCase() + '</span></div></a>' +
+    groups.map(([title, items], gi) => '<section class="col in" style="--d:' + (0.14 + gi * 0.1).toFixed(2) + 's;gap:10px"><h2 class="eyebrow" style="padding:0 4px">' + title + '</h2><div class="card" style="padding:0;overflow:hidden">' +
       items.map(([href, name, sub, hue, ic, badge], i) => { k++; return '<a href="#' + href + '" class="row fade" style="--d:' + (0.25 + k * 0.05).toFixed(2) + 's;min-height:68px;padding:0 16px;gap:14px;color:var(--tx);border-bottom:1px solid ' + (i === items.length - 1 ? 'transparent' : 'rgba(255,255,255,.05)') + '">' +
         '<span class="ico" style="width:40px;height:40px;border-radius:13px;background:' + rgba(hue, 0.13) + ';color:' + hue + '">' + icon(ic, 19) + '</span><span class="col grow" style="gap:2px"><span style="font-size:15px;font-weight:700">' + name + '</span><span class="small muted">' + esc(sub) + '</span></span>' +
         (badge ? '<span class="pill" style="color:#FFB84D;background:rgba(255,184,77,.12)">' + badge + '</span>' : '') + '<span style="color:#5C5C66">' + icon('chevron-right', 16, 2.4) + '</span></a>'; }).join('') + '</div></section>').join('') +
@@ -842,7 +838,7 @@ function scrStats() {
   }
 
   const pi = ['mes', '6m', 'ano'].indexOf(per);
-  return '<div class="page sub">' + glow('#8B7CFF', -120, 'right', 360, 12) + subHeader('Análisis') +
+  return '<div class="page sub">' + glow('#5AC8FF', -120, 'right', 360, 12) + subHeader('Análisis') +
     '<div class="seg in" role="group" aria-label="Periodo" style="--d:.03s;grid-template-columns:repeat(3,minmax(0,1fr))"><span class="knob" style="width:calc((100% - 8px)/3);left:calc(4px + ' + pi + ' * (100% - 8px)/3)"></span>' +
     [['mes', 'Mes'], ['6m', '6 meses'], ['ano', 'Año']].map((p) => '<button class="' + (p[0] === per ? 'on' : '') + '" data-act="stats-period" data-v="' + p[0] + '" aria-pressed="' + (p[0] === per) + '">' + p[1] + '</button>').join('') + '</div>' +
     '<section class="between in" style="--d:.06s;align-items:flex-end"><div class="col" style="gap:4px"><span class="muted" style="font-size:13px">' + label + '</span><span class="num" data-count="' + total.toFixed(2) + '" data-dec="' + (per === 'mes' ? 2 : 0) + '" data-suffix=" €" style="font-size:34px;font-weight:600;letter-spacing:-1.4px">' + eur(total, per === 'mes' ? 2 : 0) + '</span></div>' +
@@ -856,8 +852,8 @@ function scrStats() {
     '<div class="row small" style="gap:6px;color:var(--tx4)"><span>Menos</span><span style="width:14px;height:14px;border-radius:4px;background:#1E1E23"></span>' + lv.map((c) => '<span style="width:14px;height:14px;border-radius:4px;background:' + c + '"></span>').join('') + '<span>Más</span></div></section>' +
     '<section class="card col in" style="--d:.22s;gap:16px;border-radius:28px"><div class="between"><h2 style="font-size:16px">¿En qué se va?</h2><span class="small muted">' + cap(MONTHS[mo]) + '</span></div>' +
     (entries.length ? '<div style="position:relative;width:176px;height:176px;align-self:center"><svg width="176" height="176" viewBox="0 0 176 176" fill="none" style="transform:rotate(-90deg)" role="img" aria-label="Reparto por categoría"><circle cx="88" cy="88" r="62" stroke="#1E1E23" stroke-width="10"/>' + segs + '</svg>' +
-      '<div class="col" style="position:absolute;inset:0;align-items:center;justify-content:center;gap:2px"><span style="font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:1px">' + esc(picked ? picked[0] : 'Variables') + '</span><span class="num" style="font-size:20px;font-weight:600;letter-spacing:-.6px">' + eur(picked ? picked[1] : tot) + '</span><span class="small muted">' + (picked ? Math.round(picked[1] / tot * 100) + ' % del total' : top.length + ' categorías') + '</span></div></div><div class="grid2" style="gap:8px">' + legend + '</div>' : '<p class="muted small" style="margin:0">Sin gastos este mes todavía.</p>') + '</section>' +
-    '<section class="in" style="--d:.28s;position:relative;border-radius:24px;padding:1.5px;overflow:hidden"><div aria-hidden="true" style="position:absolute;left:50%;top:50%;width:600px;height:600px;margin:-300px 0 0 -300px;background:conic-gradient(from 0deg,rgba(255,184,77,0),#FFB84D 60deg,rgba(139,124,255,0) 140deg,rgba(139,124,255,0) 220deg,#8B7CFF 290deg,rgba(255,184,77,0) 360deg);animation:spin 6s linear infinite"></div>' +
+      '<div class="col" style="position:absolute;inset:0;align-items:center;justify-content:center;gap:2px"><span style="font-size:11px;font-weight:700;color:var(--tx3)">' + esc(picked ? picked[0] : 'Variables') + '</span><span class="num" style="font-size:20px;font-weight:600;letter-spacing:-.6px">' + eur(picked ? picked[1] : tot) + '</span><span class="small muted">' + (picked ? Math.round(picked[1] / tot * 100) + ' % del total' : top.length + ' categorías') + '</span></div></div><div class="grid2" style="gap:8px">' + legend + '</div>' : '<p class="muted small" style="margin:0">Sin gastos este mes todavía.</p>') + '</section>' +
+    '<section class="in" style="--d:.28s;position:relative;border-radius:24px;padding:1.5px;overflow:hidden"><div aria-hidden="true" style="position:absolute;left:50%;top:50%;width:600px;height:600px;margin:-300px 0 0 -300px;background:conic-gradient(from 0deg,rgba(255,184,77,0),#FFB84D 60deg,rgba(90,200,255,0) 140deg,rgba(90,200,255,0) 220deg,#5AC8FF 290deg,rgba(255,184,77,0) 360deg)"></div>' +
     '<div class="row" style="position:relative;align-items:flex-start;gap:12px;padding:16px;border-radius:23px;background:#17151A"><span class="ico" style="width:38px;height:38px;border-radius:12px;background:rgba(255,184,77,.12);color:#FFB84D">' + icon('lightbulb', 20) + '</span><div class="col" style="gap:4px"><b style="font-size:14px">' + insightT + '</b><span style="font-size:13px;line-height:1.45;color:#C8C8D0">' + insightB + '</span></div></div></section>' +
     '</div>' + tabbar('mas');
 }
@@ -903,7 +899,7 @@ function scrFijos() {
     hero = '<section class="row in" style="--d:.1s;position:relative;overflow:hidden;gap:16px;padding:18px;border-radius:28px;background:linear-gradient(135deg,#2A2112,#161411 70%);border:1px solid rgba(255,184,77,.25)">' +
       '<div style="position:relative;width:84px;height:84px;flex-shrink:0">' + ring(84, 7, clamp((1 - dd / 30) * 100, 4, 100), '#FFB84D', 0.5, 'rgba(255,184,77,.15)') +
       '<div class="col" style="position:absolute;inset:0;align-items:center;justify-content:center;line-height:1"><span class="num" style="font-size:26px;font-weight:700;color:#FFB84D">' + dd + '</span><span style="font-size:11px;font-weight:800;color:#E8C88E">' + (dd === 1 ? 'día' : 'días') + '</span></div></div>' +
-      '<div class="col grow" style="gap:4px"><span class="row" style="gap:6px;font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#FFB84D"><span class="dot" style="width:7px;height:7px;background:#FFB84D;animation:amberPulse 1.8s ease-out infinite"></span>Próximo cargo</span>' +
+      '<div class="col grow" style="gap:4px"><span class="row eyebrow" style="gap:6px;color:#FFB84D"><span class="dot" style="width:7px;height:7px;background:#FFB84D"></span>Próximo cargo</span>' +
       '<span style="font-size:18px;font-weight:800">' + esc(nc.f.nombre) + '</span><span style="font-size:13px;color:#C8B89A">' + cap(WD[nc.d.getDay()]) + ' ' + nc.d.getDate() + ' ' + MONTHS_S[nc.d.getMonth()] + ' · ' + eur(nc.f.importe) + '</span></div></section>';
   }
   return '<div class="page sub">' + glow('#FFB84D', -100, 'left', 380, 12) + subHeader('Fijos y suscripciones') +
@@ -986,7 +982,7 @@ function resumenData() {
 function scrResumen() {
   const r = resumenData();
   const i = S.ui.story;
-  const themes = [[acc(), '#0B0B0D'], ['#8B7CFF', '#0B0B0D'], ['#FF9F5A', '#0B0B0D'], ['#0B0B0D', '#F4F4F5'], ['#FF5D73', '#0B0B0D']];
+  const themes = [[acc(), '#0B0B0D'], ['#5AC8FF', '#0B0B0D'], ['#FF9F5A', '#0B0B0D'], ['#0B0B0D', '#F4F4F5'], ['#FF5D73', '#0B0B0D']];
   const [bg, fg] = themes[i];
   const segs = [0, 1, 2, 3, 4].map((k) => '<span style="height:4px;border-radius:2px;background:' + (i === 3 ? 'rgba(244,244,245,.2)' : 'rgba(11,11,13,.18)') + ';overflow:hidden"><span style="display:block;height:4px;background:' + fg + ';transform-origin:left;transform:scaleX(' + (k <= i ? 1 : 0) + ');' + (k === i && i < 4 ? 'animation:fill' + (S.ui.storyGen % 2 ? 'A' : 'B') + ' 5.6s linear both' : '') + '"></span></span>').join('');
   const mName = MONTHS[r.mo];
@@ -1077,7 +1073,7 @@ function scrApplePay() {
     '<section class="card col in" style="--d:.15s;gap:16px;border-radius:26px"><h2>Apple Pay automático</h2>' +
     step(1, 'Crea la automatización', 'App Atajos → Automatización → + → Cartera (Transacción). Elige tus tarjetas y marca «Ejecutar inmediatamente».', acc()) +
     step(2, 'Añade «Obtener contenido de URL»', 'Pega tu URL. Método: POST. Cuerpo de la solicitud: JSON con estos campos: token (tu token), action = applepay, amount = Importe y merchant = Comercio (las dos últimas como variables de la transacción).', '#B4A8FF') +
-    step(3, 'Muestra el resultado', 'Añade «Obtener valor del diccionario» con la clave mensaje y después «Mostrar notificación». Así ves en qué categoría ha caído cada pago.', '#8B7CFF') +
+    step(3, 'Muestra el resultado', 'Añade «Obtener valor del diccionario» con la clave mensaje y después «Mostrar notificación». Así ves en qué categoría ha caído cada pago.', '#5AC8FF') +
     '<span class="small" style="color:var(--tx4);line-height:1.5">Solo salta con pagos de Apple Pay desde el iPhone o el reloj. La tarjeta física, Bizum o el efectivo se apuntan a mano o con foto del ticket.</span></section>' +
     '<section class="card col in" style="--d:.2s;gap:16px;border-radius:26px;background:linear-gradient(120deg,#2A1530,#141417 70%);border-color:rgba(244,114,182,.22)"><div class="row" style="gap:14px"><div class="row" aria-hidden="true" style="gap:4px;height:36px">' +
     [0.9, 1.2, 0.7, 1.1, 0.8, 1.3, 1.0].map((dd, i) => '<span style="width:5px;height:32px;border-radius:3px;background:#F472B6;animation:wave ' + dd + 's ease-in-out ' + (i * 0.12).toFixed(2) + 's infinite"></span>').join('') + '</div><div class="col" style="gap:2px"><b style="font-size:15px">«Oye Siri, gasto»</b><span class="small" style="color:var(--tx2)">Apunta hablando, sin abrir la app.</span></div></div>' +
@@ -1310,7 +1306,7 @@ function curveHTML(y, mo, day) {
     '<polyline class="draw" points="' + str(cc) + '" stroke="' + mc + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:' + (len(cc) * 1.08).toFixed(0) + ' 0;--d:.45s"/>' +
     '<path d="M' + last[0].toFixed(1) + ' ' + P + 'V' + (H - P) + '" stroke="' + rgba(mc, 0.25) + '" stroke-dasharray="2 4"/>' +
     '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + mc + '"/>' +
-    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + mc + '" style="transform-box:fill-box;transform-origin:center;animation:dotPulse 2s ease-out 1.4s infinite"/></svg>' +
+    '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="5" fill="' + mc + '" style="transform-box:fill-box;transform-origin:center"/></svg>' +
     '<div class="between small" style="color:var(--tx4);margin-top:-6px"><span>1</span><span>15</span><span>' + X + '</span></div>' +
     '<div class="row small" style="gap:16px;color:var(--tx3)"><span class="row" style="gap:6px"><span style="width:16px;height:3px;border-radius:2px;background:' + mc + '"></span>' + cap(MONTHS[mo]) + '</span>' + (prev[pdim] ? '<span class="row" style="gap:6px"><span style="width:16px;height:0;border-top:2px dashed #5C5C66"></span>' + cap(pm) + '</span>' : '') + '</div></section>';
 }
@@ -1512,7 +1508,7 @@ function scrAjustes() {
 
 function scrSetup() {
   const F = S.ui.form;
-  return '<div class="page" style="justify-content:center;min-height:100vh;padding-bottom:40px">' + glow(acc(), 60, 'left', 420, 12) + glow('#8B7CFF', 420, 'right', 360, 14) +
+  return '<div class="page" style="justify-content:center;min-height:100vh;padding-bottom:40px">' + glow(acc(), 60, 'left', 420, 12) + glow('#5AC8FF', 420, 'right', 360, 14) +
     '<div class="col in" style="align-items:center;text-align:center;gap:16px;padding-top:30px"><img src="icon-192.png" alt="" width="88" height="88" style="border-radius:24px;box-shadow:0 18px 40px ' + rgba(acc(), 0.25) + '">' +
     '<h1 style="font-size:32px">Gastos</h1><span style="font-size:15px;color:var(--tx2);max-width:300px;line-height:1.5">Tu dinero, apuntado en segundos y guardado en tu propio Google Sheet.</span></div>' +
     '<section class="card col in" style="--d:.15s;gap:14px;border-radius:26px"><h2>Conectar mi Sheet</h2>' +
@@ -1606,7 +1602,7 @@ function confetti(fromEl) {
   const r = fromEl.getBoundingClientRect();
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;left:' + (r.left + r.width / 2) + 'px;top:' + (r.top + r.height / 2) + 'px;width:0;height:0;pointer-events:none;z-index:80';
-  const pal = [acc(), '#8B7CFF', '#5AC8FF', '#FF9F5A', '#F472B6', '#F4F4F5'];
+  const pal = [acc(), '#2DD4BF', '#5AC8FF', '#FF9F5A', '#F472B6', '#F4F4F5'];
   for (let i = 0; i < 22; i++) {
     const a = -85 + (170 / 21) * i;
     const s = document.createElement('span');
