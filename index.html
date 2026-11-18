@@ -214,6 +214,19 @@ html[data-dir=down]::view-transition-new(root){animation-name:fadeInVT}
   .addpg .savebtn{min-height:52px!important}
   .addpg .detrow{min-height:46px;padding-top:5px;padding-bottom:5px}
 }
+.recs .chip.devchip{padding:0 12px;color:var(--acc);border:1px dashed rgba(212,255,58,.4);background:rgba(212,255,58,.04)}
+.recs .chip.devchip.on{background:var(--acc);border:1px solid var(--acc);color:#0B0B0D}
+/* Pendiente de cobro */
+.owed{padding:16px;display:flex;flex-direction:column;gap:2px}
+.owedrow{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.owed .between+.owedrow{border-top:0}
+.cobbtn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:12px;background:rgba(212,255,58,.1);border:1px solid rgba(212,255,58,.22);color:var(--acc);font-size:13px;font-weight:800;flex-shrink:0}
+/* ¿Apartas? */
+.goalbox{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:var(--r-md,16px);background:#0F0F12;border:1px solid var(--line)}
+.btn.sec{background:var(--s2,#1B1B20);border:1px solid var(--line);color:var(--tx)}
+.btn.ghost.block[data-act="sheet-close"]{background:none;color:var(--tx2);min-height:44px}
+.grid3 .mini{justify-content:space-between}
+.mini .l{line-height:1.25}
 /* Céntimos subordinados en importes grandes */
 .eur .c{font-size:.55em;font-weight:500;color:var(--tx3);vertical-align:.38em;letter-spacing:0}
 .oncolor .eur .c{color:inherit;opacity:.55}
@@ -257,7 +270,6 @@ html[data-dir=down]::view-transition-new(root){animation-name:fadeInVT}
 @keyframes fillA{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes fillB{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes dropIn{from{opacity:0;transform:translateY(-24px) scale(.95)}}
-@keyframes zoomIn{0%{opacity:0;transform:scale(.6)}70%{transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
 @keyframes wave{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
 body.calm *,body.calm *::before,body.calm *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
